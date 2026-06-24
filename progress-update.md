@@ -1,0 +1,190 @@
+# Progress Tracker
+
+Update this file whenever the current phase, active feature, or implementation state changes.
+
+
+# Sprint plan — agentic WordPress automation platform
+
+This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
+
+## Current Phase
+- Sprint 1 (Repo setup & architecture spike) — in progress
+
+## Current Goal
+- Sprint 1 (Repo setup & architecture spike) — not yet complete; Sprint 2 queued behind it
+
+---
+
+## Sprint 1 — Repo setup & architecture spike — ▶ IN PROGRESS
+
+**Phase:** Foundation
+
+**Goal:** A running skeleton — an empty agent loop talking to a test WP site, nothing functional yet.
+
+**Tasks**
+- [ ] Scaffold monorepo: /frontend (Next.js), /backend (FastAPI), /agent (LangGraph), per project-structure.md
+- [ ] Docker Compose: Postgres, Redis, local WP + Elementor instance, FastAPI, Next.js
+- [ ] Set up Anthropic SDK auth, env config, secrets handling (no hardcoded keys)
+- [ ] Write a single LangGraph node — "ping" — that calls Claude and returns text, no WP yet
+
+
+**Deliverable:** Dev environment boots with one command; agent responds to a test prompt end-to-end through the API. — **Not yet met.**
+
+---
+
+## Sprint 2 — Dashboard, chat UI & approval UI — NEXT UP
+
+**Phase:** Foundation
+
+**Goal:** A usable interface shell — type a request, watch it stream, approve or reject a plan. Built early against a minimal/mocked backend so frontend work isn't blocked on later sprints; wired up to real data as those sprints land.
+
+**Tasks**
+- [ ] Build Next.js dashboard shell with shadcn/ui: sidebar, project list, chat panel
+- [ ] Wire Vercel AI SDK useChat to a streaming endpoint (mocked or minimal at this stage)
+- [ ] Build the approval modal: shows planned changes/diff, approve/reject buttons
+- [ ] Zustand store for live task state; TanStack Query for project/site data
+- [ ] Task log panel showing each tool call and its result, for transparency
+
+**Deliverable:** A non-technical user can type a request, see a plan, approve it, and watch a (mocked or early) execution stream live.
+
+---
+
+## Sprint 3 — WP REST API & WP-CLI tool wrappers
+
+**Phase:** Build
+
+**Goal:** The agent can read and write to a real WP site through typed tools — no Elementor or skills logic yet.
+
+**Tasks**
+- Build WP REST API client: auth via Application Passwords, CRUD for posts/pages/media/menus
+- Build WP-CLI wrapper over SSH (Paramiko/Fabric): install, activate, flush-cache commands
+- Wrap each as a typed LangGraph tool with explicit input/output schemas
+- Write Pytest unit tests for every tool wrapper against the Dockerized WP instance
+- Add credential storage in Postgres (encrypted) for multiple WP sites
+
+**Deliverable:** Agent can create a blank WP page and install a plugin via natural language, with passing tests.
+
+---
+
+## Sprint 4 — Orchestration graph & approval gate
+
+**Phase:** Build
+
+**Goal:** A real orchestrator that plans multi-step tasks and pauses for human approval before writing — replacing the mocked approval flow from Sprint 2 with the real thing.
+
+**Tasks**
+- Design the LangGraph state machine: plan → select skill → preview → approve → execute → report
+- Implement the approval checkpoint as a graph interrupt, resumable from the frontend
+- Add task persistence in Postgres so a paused task survives a server restart
+- Add Celery + Redis for async/long-running task execution
+- Set up LangSmith tracing for every graph run
+- Connect the Sprint 2 dashboard to the real interrupt/resume flow in place of the mock
+
+**Deliverable:** A multi-step task (e.g. "install plugin, then create a page") pauses correctly in the real UI and resumes only after approval.
+
+---
+
+## Sprint 5 — Elementor JSON generation skill
+
+**Phase:** Integration
+
+**Goal:** The agent can generate a working Elementor page layout from a plain-language brief. This is the highest-risk sprint — budget extra time and don't compress it to match the others.
+
+**Tasks**
+- Hand-build 10–15 real Elementor pages covering common sections (hero, gallery, pricing, contact, footer)
+- Export their _elementor_data JSON into an example library for pattern-matching
+- Build the skill: brief → Claude generates Elementor JSON → validate against schema → write via REST API
+- Add the post-write step: trigger wp elementor flush-css via WP-CLI after every layout write
+- Build a JSON-schema validator to catch malformed structures before they're written
+
+**Deliverable:** Agent generates a 3–4 section landing page that renders correctly in Elementor without manual fixes, for 5+ test briefs.
+
+---
+
+## Sprint 6 — Content, SEO & theming skills
+
+**Phase:** Integration
+
+**Goal:** Round out the skill set beyond page layout — the things that make a site feel finished.
+
+**Tasks**
+- Content generation skill: draft posts, assign categories/tags, schedule via REST API
+- SEO skill: generate meta titles/descriptions, schema markup; integrate with Yoast/RankMath REST endpoints
+- Theme customizer skill: colors, fonts, header/footer via WP Customizer API + Elementor global settings
+- Plugin management skill: search, install, activate, configure common plugins (forms, caching)
+
+**Deliverable:** Agent can take a site from blank install to a themed, SEO-configured, content-populated state end-to-end.
+
+---
+
+## Sprint 7 — Multi-step task decomposition
+
+**Phase:** Build
+
+**Goal:** Handle a full brief ("build me a 5-page site") by decomposing it into an ordered task graph automatically.
+
+**Tasks**
+- Build the orchestrator-level planning step: brief → ordered list of skill invocations with dependencies
+- Handle dependency ordering (theme before content, pages before menu assembly)
+- Add a rollback/snapshot mechanism before each major write (WP DB export beforehand)
+- Add partial-failure handling: if step 3 of 7 fails, surface it clearly rather than silently continuing
+
+**Deliverable:** A single brief produces a multi-page site with menu, theme, and SEO applied in correct order, unattended after one approval.
+
+---
+
+## Sprint 8 — Eval suite & quality scoring
+
+**Phase:** Hardening
+
+**Goal:** Confidence that each skill works reliably, with a repeatable way to catch regressions.
+
+**Tasks**
+- Build a golden dataset: 20+ real-world WP task scenarios across all skills
+- Automate eval runs against the sandboxed Docker WP instance, scored for correctness
+- Add Playwright visual regression: screenshot agent-generated pages, flag visual breaks
+- Wire evals into GitHub Actions — every PR touching a skill must pass its eval set
+
+**Deliverable:** CI blocks any PR that regresses a skill's eval score; team has a quality dashboard.
+
+---
+
+## Sprint 9 — Security hardening
+
+**Phase:** Hardening
+
+**Goal:** Close the gaps that matter once this touches real client sites.
+
+**Tasks**
+- Audit: agent cannot execute arbitrary PHP/shell beyond the explicit allow-listed WP-CLI commands
+- Add rate limiting and per-site cost controls on LLM and API usage
+- Review credential storage and rotation; move to Vault if managing 10+ sites
+- Add staging-first enforcement: agent always runs against staging before production, configurable per project
+
+**Deliverable:** Internal security review signed off; no direct production writes without a staging pass.
+
+---
+
+## Sprint 10 — Beta launch
+
+**Phase:** Hardening
+
+**Goal:** Prove the system on real work, not test scenarios.
+
+**Tasks**
+- Run 3–5 real WP projects through the agent with a human reviewing every approval gate
+- Log every failure mode and edge case the eval suite missed; feed back into Sprint 5/6 skills
+- Write onboarding docs and a short example-project library for new team members
+- Retro: which skills saved the most time, which need another pass
+
+**Deliverable:** 5 real sites shipped using the agent; documented time-savings and known limitations.
+
+---
+
+## Sequencing notes
+
+- **Sprint 2 (dashboard) ships early, against mocked data on purpose.** This unblocks frontend work in parallel with backend sprints, but it means Sprint 2's approval flow is a mock until Sprint 4 wires it to the real LangGraph interrupt — don't treat Sprint 2's "done" as production-ready end to end.
+- **Sprint 5 is the bottleneck** (Elementor JSON generation). Everything before it is plumbing; everything after it depends on the agent reliably producing valid Elementor layouts. Don't rush the example library — a flaky page-generation skill poisons every later sprint.
+- **Sprint 4 (approval gate) replaces Sprint 2's mock with the real thing.** The interrupt is built into the LangGraph state machine, then reconnected to the dashboard that already exists.
+- **Sprint 8 (evals) happens after the skills exist, not before.** Writing eval scenarios against real skill behavior beats guessing at failure modes in advance.
+- **Sprint 10 is not "done."** Treat its findings as a backlog for a second iteration, not a wrap-up — it's there to prove (or disprove) that Sprints 5 and 6 hold up outside a Docker sandbox.
