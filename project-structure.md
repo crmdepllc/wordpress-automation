@@ -2,7 +2,7 @@
 
 This document describes the layout of the **WordPress Automation** repository — an AI agent system that builds and manages WordPress/Elementor sites from natural-language instructions. For the intended end-state architecture and the role each technology plays, see [project-overview.md](project-overview.md).
 
-> **Current state:** Sprint 1 (repo setup & architecture spike) is complete. The backend exposes a FastAPI app with a single LangGraph "ping" node that calls Claude; the frontend has a minimal page that drives that node end-to-end; the whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
+> **Current state:** Sprints 1–2 complete. The backend exposes a FastAPI app with a single LangGraph "ping" node that calls Claude (Sprint 1); the frontend is a working dashboard shell — sidebar + project list, streaming chat, a human approval modal, and a live task log — running against mocked Next.js API routes (Sprint 2). The whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
 
 ## Top-level layout
 
@@ -92,22 +92,43 @@ frontend/
 ├── public/                # Static assets (next.svg, vercel.svg, file.svg, globe.svg, window.svg)
 └── src/
     ├── app/               # Next.js App Router
-    │   ├── layout.tsx     # Root layout — Geist fonts, global CSS
-    │   ├── page.tsx       # Ping UI — posts a prompt to /api/ping, shows the reply
+    │   ├── layout.tsx     # Root layout — fonts, global CSS, <Providers>
+    │   ├── page.tsx       # Dashboard: sidebar + chat + task log + approval modal
     │   ├── globals.css    # Tailwind import + design-token CSS variables
-    │   └── favicon.ico
+    │   ├── favicon.ico
+    │   ├── ping/
+    │   │   └── page.tsx   # Sprint 1 ping spike (backend round-trip), kept at /ping
+    │   └── api/           # Mocked backend routes for the Sprint 2 UI shell
+    │       ├── chat/route.ts      # useChat endpoint — streams text + a data-plan part
+    │       ├── execute/route.ts   # streams ndjson tool-log events after approval
+    │       └── projects/route.ts  # project/site list for the sidebar
     ├── components/
-    │   └── ui/
-    │       └── button.tsx # shadcn Button (Base UI + CVA)
+    │   ├── providers.tsx          # TanStack Query client provider
+    │   ├── dashboard/
+    │   │   ├── app-sidebar.tsx    # Sidebar + project list (TanStack Query)
+    │   │   ├── chat-panel.tsx     # useChat chat UI; surfaces plans for approval
+    │   │   ├── approval-modal.tsx # Human approval gate — plan/diff, approve/reject
+    │   │   └── task-log-panel.tsx # Live tool-call log + task status
+    │   └── ui/                    # shadcn-style primitives (Base UI + CVA, tokens)
+    │       ├── button.tsx
+    │       ├── card.tsx
+    │       ├── badge.tsx
+    │       ├── separator.tsx
+    │       └── dialog.tsx
+    ├── store/
+    │   └── task-store.ts          # Zustand live task state + runExecution() stream reader
     └── lib/
-        └── utils.ts       # cn() class-merge helper
+        ├── utils.ts               # cn() class-merge helper
+        ├── types.ts               # Plan / ToolLogEntry / Project / ChatUIMessage types
+        ├── mock-data.ts           # Mock projects + buildMockPlan()
+        └── use-projects.ts        # TanStack Query hook for the project list
 ```
 
 - **Framework:** Next.js `16.2.9` (App Router), React `19.2.4`. _Note: the overview refers to "Next.js 14"; the installed version is 16.x._
 - **Package manager:** `npm` (`package-lock.json`).
 - **Styling:** Tailwind CSS v4 via `@tailwindcss/postcss`, with theme variables in [globals.css](frontend/src/app/globals.css).
-- **State / data:** Zustand `^5` (in-memory UI state) and TanStack Query `^5` (server/data fetching) are installed but not yet wired in.
-- **AI streaming:** Vercel AI SDK (`ai` `^6`) installed; not yet used.
+- **State / data:** Zustand `^5` drives live task state ([store/task-store.ts](frontend/src/store/task-store.ts)); TanStack Query `^5` fetches the project list ([lib/use-projects.ts](frontend/src/lib/use-projects.ts)) via the [Providers](frontend/src/components/providers.tsx) wrapper.
+- **AI streaming:** Vercel AI SDK — `ai` `^6` (server stream helpers) + `@ai-sdk/react` `^3` (`useChat`). The chat panel streams from `/api/chat`; the plan arrives as a typed `data-plan` part. _Backend is mocked in Sprint 2; Sprint 4 swaps these routes for the real LangGraph interrupt/resume._
 - **Backend URL:** `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`) — set in `docker-compose.yml` and `frontend/.env.example`.
 - **Scripts:** `dev`, `build`, `start` (Next.js) and `lint` (ESLint).
 - **Path alias:** `@/*` resolves to `frontend/src/*`.
@@ -125,6 +146,6 @@ frontend/
 
 ## Notable observations
 
-- **Sprint 1 complete:** The end-to-end path (frontend → FastAPI → LangGraph → Claude → back) works. Everything beyond the ping spike (WP tooling, approval gate, persistence) is still the target architecture in [project-overview.md](project-overview.md), not yet built.
+- **Sprints 1–2 complete:** Sprint 1 — the end-to-end path (frontend → FastAPI → LangGraph → Claude → back) works. Sprint 2 — the dashboard shell (sidebar, chat, approval modal, task log) runs against mocked Next.js API routes. The approval gate here is a UI mock; Sprint 4 wires it to the real LangGraph interrupt. WP tooling and persistence remain target architecture in [project-overview.md](project-overview.md), not yet built.
 - **Version drift:** The overview describes "Next.js 14," but `package.json` pins `16.2.9`. Follow the installed version and its bundled docs.
 - **Deps reconciled:** All backend dependencies (including `langgraph` and `anthropic`) now live in `pyproject.toml` / `uv.lock`; there is no separate `requirements.txt`.

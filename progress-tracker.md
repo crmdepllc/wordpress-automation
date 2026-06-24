@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 2 (Dashboard, chat UI & approval UI) — next up
+- Sprint 3 (WP REST API & WP-CLI tool wrappers) — next up
 
 ## Current Goal
-- Sprint 1 (Repo setup & architecture spike) — ✅ complete; Sprint 2 ready to start
+- Sprints 1–2 — ✅ complete; Sprint 3 ready to start
 
 ---
 
@@ -36,24 +36,32 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 2 — Dashboard, chat UI & approval UI — ▶ NEXT UP
+## Sprint 2 — Dashboard, chat UI & approval UI — ✅ COMPLETE
 
 **Phase:** Foundation
 
 **Goal:** A usable interface shell — type a request, watch it stream, approve or reject a plan. Built early against a minimal/mocked backend so frontend work isn't blocked on later sprints; wired up to real data as those sprints land.
 
 **Tasks**
-- [ ] Build Next.js dashboard shell with shadcn/ui: sidebar, project list, chat panel
-- [ ] Wire Vercel AI SDK useChat to a streaming endpoint (mocked or minimal at this stage)
-- [ ] Build the approval modal: shows planned changes/diff, approve/reject buttons
-- [ ] Zustand store for live task state; TanStack Query for project/site data
-- [ ] Task log panel showing each tool call and its result, for transparency
+- [x] Build Next.js dashboard shell with shadcn/ui-style components: sidebar, project list, chat panel
+- [x] Wire Vercel AI SDK useChat to a streaming endpoint (mocked `/api/chat`)
+- [x] Build the approval modal: shows planned changes/diff, approve/reject buttons
+- [x] Zustand store for live task state; TanStack Query for project/site data
+- [x] Task log panel showing each tool call and its result, for transparency
 
-**Deliverable:** A non-technical user can type a request, see a plan, approve it, and watch a (mocked or early) execution stream live.
+**Deliverable:** A non-technical user can type a request, see a plan, approve it, and watch a (mocked) execution stream live. — **Met.**
+
+**Notes**
+- Added `@ai-sdk/react` (Vercel AI SDK React bindings) — `ai` v6 ships server stream helpers but not the `useChat` hook. `useChat` posts to `/api/chat`, which streams assistant text plus a typed `data-plan` part; the chat panel surfaces that plan to the approval modal.
+- The plan flows through Zustand (`store/task-store.ts`): chat proposes a plan → status `awaiting_approval` → modal Approve calls `runExecution()`, which streams ndjson tool events from `/api/execute` into the live task log → status `completed`. Reject sets `rejected`.
+- shadcn-style primitives are hand-built on Base UI + CVA (matching the existing `button.tsx`), design-tokens only — no hardcoded colors.
+- **This is a mock.** Per the sequencing notes, Sprint 2's approval flow is a UI mock until Sprint 4 replaces `/api/chat` + `/api/execute` with the real LangGraph interrupt/resume against the FastAPI backend.
+- Sprint 1's ping spike is preserved at `/ping`. Verified: `tsc` clean, `next build` clean (8 routes), and all three mock endpoints return correct data at runtime (projects JSON, chat stream w/ plan, execute ndjson log).
+- Follow-up: run `/imprint` to capture the new UI component patterns (per AGENTS.md).
 
 ---
 
-## Sprint 3 — WP REST API & WP-CLI tool wrappers
+## Sprint 3 — WP REST API & WP-CLI tool wrappers — ▶ NEXT UP
 
 **Phase:** Build
 
