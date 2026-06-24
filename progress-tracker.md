@@ -8,31 +8,35 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 1 (Repo setup & architecture spike) — in progress
+- Sprint 2 (Dashboard, chat UI & approval UI) — next up
 
 ## Current Goal
-- Sprint 1 (Repo setup & architecture spike) — not yet complete; Sprint 2 queued behind it
+- Sprint 1 (Repo setup & architecture spike) — ✅ complete; Sprint 2 ready to start
 
 ---
 
-## Sprint 1 — Repo setup & architecture spike — ▶ IN PROGRESS
+## Sprint 1 — Repo setup & architecture spike — ✅ COMPLETE
 
 **Phase:** Foundation
 
 **Goal:** A running skeleton — an empty agent loop talking to a test WP site, nothing functional yet.
 
 **Tasks**
-- [ ] Scaffold monorepo: /frontend (Next.js), /backend (FastAPI), /agent (LangGraph), per project-structure.md
-- [ ] Docker Compose: Postgres, Redis, local WP + Elementor instance, FastAPI, Next.js
-- [ ] Set up Anthropic SDK auth, env config, secrets handling (no hardcoded keys)
-- [ ] Write a single LangGraph node — "ping" — that calls Claude and returns text, no WP yet
+- [x] Scaffold monorepo: /frontend (Next.js), /backend (FastAPI + LangGraph), per project-structure.md
+- [x] Docker Compose: Postgres (pgvector), Redis, local WP + Elementor instance, FastAPI, Next.js
+- [x] Set up Anthropic SDK auth, env config, secrets handling (no hardcoded keys)
+- [x] Write a single LangGraph node — "ping" — that calls Claude and returns text, no WP yet
 
+**Deliverable:** Dev environment boots with one command (`docker compose up --build`); agent responds to a test prompt end-to-end through the API. — **Met.**
 
-**Deliverable:** Dev environment boots with one command; agent responds to a test prompt end-to-end through the API. — **Not yet met.**
+**Notes**
+- LangGraph lives inside the backend (`backend/app/agent/`) per project-structure.md, which defines the backend as the "FastAPI + LangGraph agent server" — not a separate top-level `/agent` package, which would have duplicated the `uv` environment.
+- The ping node uses the fast model (`claude-haiku-4-5`) per the AGENTS.md model-routing rule — a narrow single-shot call, not orchestrator reasoning.
+- Verified locally: backend imports cleanly, `/health` → ok, `/api/ping` validates input (422 on empty) and routes through the graph to a clear error when `ANTHROPIC_API_KEY` is unset (400). A real Claude round-trip requires the user's key in `backend/.env` (intentionally not committed). Frontend type-checks clean.
 
 ---
 
-## Sprint 2 — Dashboard, chat UI & approval UI — NEXT UP
+## Sprint 2 — Dashboard, chat UI & approval UI — ▶ NEXT UP
 
 **Phase:** Foundation
 

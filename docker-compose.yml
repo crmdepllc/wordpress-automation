@@ -1,0 +1,152 @@
+# One-command dev environment for the WordPress Automation platform.
+#
+#   docker compose up --build
+#
+# Brings up: the app database (Postgres + pgvector), Redis, a local WordPress
+# instance with Elementor, the FastAPI + LangGraph backend, and the Next.js
+# dashboard. Copy .env.example to .env and set ANTHROPIC_API_KEY first.
+
+services:
+  # --- App database: Postgres with pgvector (project/task data, embeddings) ---
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: wpa
+      POSTGRES_PASSWORD: wpa
+      POSTGRES_DB: wpa
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wpa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Redis: Celery broker / result store for long-running WP tasks ---
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- WordPress database (WP requires MySQL/MariaDB, separate from app DB) ---
+  wp-db:
+    image: mariadb:11
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - wp_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # --- Local WordPress instance (the agent's target site) ---
+  wordpress:
+    image: wordpress:6-php8.3-apache
+    depends_on:
+      wp-db:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    ports:
+      - "8080:80"
+    volumes:
+      - wp_data:/var/www/html
+
+  # --- One-shot: install WordPress + activate Elementor via WP-CLI ---
+  # Runs once after WordPress is reachable, then exits. Re-running is a no-op
+  # if WP is already installed.
+  wp-init:
+    image: wordpress:cli-php8.3
+    depends_on:
+      wp-db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp_data:/var/www/html
+    entrypoint: ["/bin/sh", "/wp-init.sh"]
+    configs:
+      - source: wp_init_script
+        target: /wp-init.sh
+    restart: "no"
+
+  # --- Backend: FastAPI + LangGraph agent ---
+  backend:
+    build: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://wpa:wpa@postgres:5432/wpa
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Frontend: Next.js dashboard ---
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    ports:
+      - "3000:3000"
+
+configs:
+  wp_init_script:
+    content: |
+      #!/bin/sh
+      set -e
+      echo "Waiting for WordPress files to be provisioned..."
+      until wp core is-installed --allow-root 2>/dev/null || wp core version --allow-root 2>/dev/null; do
+        sleep 3
+      done
+      if ! wp core is-installed --allow-root; then
+        echo "Installing WordPress..."
+        wp core install --allow-root \
+          --url="http://localhost:8080" \
+          --title="WPA Sandbox" \
+          --admin_user="admin" \
+          --admin_password="admin" \
+          --admin_email="admin@example.com" \
+          --skip-email
+      fi
+      echo "Ensuring Elementor is installed and active..."
+      wp plugin is-installed elementor --allow-root || wp plugin install elementor --allow-root
+      wp plugin activate elementor --allow-root
+      echo "WordPress + Elementor ready."
+
+volumes:
+  postgres_data:
+  wp_db_data:
+  wp_data:
