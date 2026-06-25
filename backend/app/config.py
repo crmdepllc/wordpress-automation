@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://wpa:wpa@postgres:5432/wpa"
     redis_url: str = "redis://redis:6379/0"
 
+    # --- Credential encryption --------------------------------------------
+    # Fernet key used to encrypt WordPress site credentials at rest in
+    # Postgres. NEVER hardcoded. Generate one with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Empty by default so the app boots without it; the credentials service
+    # raises a clear error if a credential operation runs without a key set.
+    credential_encryption_key: str = ""
+
+    # --- Local sandbox WP-CLI (docker exec transport) ---------------------
+    # Name of the persistent WP-CLI container that the LocalDockerExecutor
+    # shells into for WP-CLI in dev/tests (the `wpcli` compose service). Real
+    # client sites use SSH instead.
+    wp_local_container: str = "wordpress-automation-wpcli-1"
+
     # --- HTTP / CORS -------------------------------------------------------
     # Comma-separated list of allowed origins for the browser dashboard.
     cors_origins: str = "http://localhost:3000"

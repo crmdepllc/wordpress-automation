@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 3 (WP REST API & WP-CLI tool wrappers) — next up
+- Sprint 4 (Orchestration graph & approval gate) — next up
 
 ## Current Goal
-- Sprints 1–2 — ✅ complete; Sprint 3 ready to start
+- Sprints 1–3 — ✅ complete; Sprint 4 ready to start
 
 ---
 
@@ -61,24 +61,37 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 3 — WP REST API & WP-CLI tool wrappers — ▶ NEXT UP
+## Sprint 3 — WP REST API & WP-CLI tool wrappers — ✅ COMPLETE
 
 **Phase:** Build
 
 **Goal:** The agent can read and write to a real WP site through typed tools — no Elementor or skills logic yet.
 
 **Tasks**
-- Build WP REST API client: auth via Application Passwords, CRUD for posts/pages/media/menus
-- Build WP-CLI wrapper over SSH (Paramiko/Fabric): install, activate, flush-cache commands
-- Wrap each as a typed LangGraph tool with explicit input/output schemas
-- Write Pytest unit tests for every tool wrapper against the Dockerized WP instance
-- Add credential storage in Postgres (encrypted) for multiple WP sites
+- [x] Build WP REST API client: auth via Application Passwords, CRUD for posts/pages/media/menus
+- [x] Build WP-CLI wrapper over SSH (Paramiko/Fabric): install, activate, flush-cache commands
+- [x] Wrap each as a typed LangGraph tool with explicit input/output schemas
+- [x] Write Pytest unit tests for every tool wrapper against the Dockerized WP instance
+- [x] Add credential storage in Postgres (encrypted) for multiple WP sites
 
-**Deliverable:** Agent can create a blank WP page and install a plugin via natural language, with passing tests.
+**Deliverable:** Agent can create a blank WP page and install a plugin via natural language, with passing tests. — **Met** (unit-verified; live demo needs Docker + an App Password — see notes).
+
+**Architecture decisions (via /architect)**
+- **WP-CLI transport = pluggable.** One interface, two backends: Fabric/Paramiko SSH for real client sites, `docker exec` into a new persistent `wpcli` compose service for the local sandbox (Apache WP container has no sshd). Chosen per-site via `wpcli_transport`.
+- **Tests = unit + gated integration.** Unit tests mock httpx (`respx`) and SSH/subprocess → always green without Docker. Integration tests are marked `@pytest.mark.integration` and self-skip when WP/Docker is down.
+- **Approval = code-level gate now.** Real interrupt graph is Sprint 4; here every write tool refuses unless `approved=True`, and `wp_agent.run_approved` is the only path that grants it. `propose()` dry-runs writes to a preview without touching the site.
+- **Encryption = Fernet key in env.** `CREDENTIAL_ENCRYPTION_KEY` from settings/.env; `EncryptedString` column encrypts secrets at rest; missing key fails loudly.
+
+**Notes / what shipped**
+- `app/wp/`: `rest_client.py` (CRUD posts/pages/media/menus), `wpcli.py` (Ssh + LocalDocker executors, install/activate/flush-css), `credentials.py`, `schemas.py`. `app/crypto.py` + `app/db/` (async engine, `WpSite` model, Alembic migration `0001`). `app/agent/tools/wp_tools.py` (11 typed tools, 7 gated writes) + `app/agent/wp_agent.py`. Routes: `/api/wp/sites`, `/api/wp/plan`, `/api/wp/execute`.
+- New persistent `wpcli` service added to `docker-compose.yml`.
+- **Tests: 26 passed, 3 skipped** (integration). Alembic migration validated (`alembic history` → head `0001`).
+- **Not verified live:** a real REST write against the sandbox needs an Application Password (the default admin login won't authenticate REST writes) and Docker running for WP-CLI. The integration tests cover this and skip until both are present.
+- Follow-up: Sprint 4 replaces the two interim approval gates (frontend mock + backend `approved` flag) with one real LangGraph interrupt.
 
 ---
 
-## Sprint 4 — Orchestration graph & approval gate
+## Sprint 4 — Orchestration graph & approval gate — ▶ NEXT UP
 
 **Phase:** Build
 

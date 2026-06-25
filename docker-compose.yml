@@ -90,6 +90,27 @@ services:
         target: /wp-init.sh
     restart: "no"
 
+  # --- Persistent WP-CLI container (LocalDockerExecutor `docker exec` target) ---
+  # Stays running so the backend can shell in for plugin installs / flush-css
+  # against the sandbox. Shares the WordPress files volume; runs as root so
+  # WP-CLI accepts --allow-root. Real client sites use SSH instead.
+  wpcli:
+    image: wordpress:cli-php8.3
+    user: root
+    depends_on:
+      wp-db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: wp-db:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp_data:/var/www/html
+    entrypoint: ["tail", "-f", "/dev/null"]
+
   # --- Backend: FastAPI + LangGraph agent ---
   backend:
     build: ./backend

@@ -22,3 +22,17 @@ dependencies = [
     "redis>=8.0.1",
     "sqlalchemy>=2.0.51",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: tests that hit the live Dockerized WordPress instance (skipped when unreachable)",
+]
