@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "section_type": "hero",
+    "layout": "single",
+    "scalar_slots": ["heading", "subheading", "cta_text"],
+    "item_slots": []
+  },
+  "template": {
+    "id": "hero000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "content_width": { "unit": "px", "size": 1140 } },
+    "elements": [
+      {
+        "id": "herocol",
+        "elType": "column",
+        "settings": { "_column_size": 100, "_inline_size": null },
+        "elements": [
+          {
+            "id": "herohdg",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{heading}}", "header_size": "h1", "align": "center" }
+          },
+          {
+            "id": "herosub",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{subheading}}", "header_size": "h3", "align": "center" }
+          },
+          {
+            "id": "herocta",
+            "elType": "widget",
+            "widgetType": "button",
+            "settings": { "text": "{{cta_text}}", "align": "center", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "section_type": "contact",
+    "layout": "single",
+    "scalar_slots": ["heading", "subheading", "email"],
+    "item_slots": []
+  },
+  "template": {
+    "id": "cnt0000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "content_width": { "unit": "px", "size": 800 } },
+    "elements": [
+      {
+        "id": "cntcol0",
+        "elType": "column",
+        "settings": { "_column_size": 100, "_inline_size": null },
+        "elements": [
+          {
+            "id": "cnthdg0",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center" }
+          },
+          {
+            "id": "cntsub0",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{subheading}}", "align": "center" }
+          },
+          {
+            "id": "cnteml0",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "Email us at {{email}}", "align": "center" }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "section_type": "pricing",
+    "layout": "grid",
+    "scalar_slots": [],
+    "item_slots": ["plan_name", "price", "cta_text"]
+  },
+  "template": {
+    "id": "prc0000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "gap": "default" },
+    "elements": [
+      {
+        "id": "prccol0",
+        "elType": "column",
+        "settings": { "_column_size": 33, "_inline_size": null },
+        "elements": [
+          {
+            "id": "prcname",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{item.plan_name}}", "header_size": "h3", "align": "center" }
+          },
+          {
+            "id": "prcamt0",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{item.price}}", "header_size": "h2", "align": "center" }
+          },
+          {
+            "id": "prccta0",
+            "elType": "widget",
+            "widgetType": "button",
+            "settings": { "text": "{{item.cta_text}}", "align": "center", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -7,6 +7,7 @@ DB), per the project's integration rules.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -147,6 +148,34 @@ class WordPressRestClient:
 
     async def delete_page(self, page_id: int, *, force: bool = False) -> None:
         await self._delete_content("pages", page_id, force)
+
+    # --- Elementor page -------------------------------------------------
+
+    async def create_elementor_page(
+        self,
+        title: str,
+        elementor_data: list[dict[str, Any]],
+        *,
+        status: str = "draft",
+    ) -> ContentItem:
+        """Create a page whose layout is Elementor ``_elementor_data``.
+
+        The layout is written as post meta. NOTE: ``_elementor_data`` is
+        protected (underscore-prefixed) meta and is only writable over REST if
+        it's registered with ``show_in_rest`` — that registration is provided by
+        the project's companion WP plugin. Without it, WordPress silently drops
+        the meta, so the render/integration eval is the real check here.
+        """
+        body = {
+            "title": title,
+            "status": status,
+            "meta": {
+                "_elementor_data": json.dumps(elementor_data),
+                "_elementor_edit_mode": "builder",
+                "_elementor_template_type": "wp-page",
+            },
+        }
+        return ContentItem.from_api(await self._request("POST", "/pages", json=body))
 
     # --- media ----------------------------------------------------------
 

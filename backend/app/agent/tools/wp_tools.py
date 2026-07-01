@@ -206,6 +206,47 @@ async def wp_flush_elementor_css(site_slug: str, approved: bool = False) -> dict
     return {"status": "applied" if result.ok else "error", "result": result.model_dump()}
 
 
+@tool
+async def wp_create_elementor_page(
+    site_slug: str, brief: str, status: str = "draft", approved: bool = False
+) -> dict[str, Any]:
+    """Generate an Elementor landing page from a plain-language brief and publish it.
+
+    Generates a validated layout, writes it via REST, then regenerates Elementor
+    CSS. WRITE — requires approved=True.
+    """
+    if not approved:
+        return _needs_approval("create Elementor page", {"site": site_slug, "brief": brief})
+
+    # Import here so the tools module doesn't pull the skill (and its model deps)
+    # unless this tool actually runs.
+    from app.agent.skills.elementor import ElementorValidationError, generate_elementor_page
+
+    try:
+        page_spec = await generate_elementor_page(brief)
+    except ElementorValidationError as exc:
+        # Never write invalid Elementor data.
+        return {"status": "error", "stage": "validation", "errors": exc.errors}
+
+    creds = await _credentials(site_slug)
+    async with WordPressRestClient.from_credentials(creds) as wp:
+        page = await wp.create_elementor_page(
+            page_spec["title"], page_spec["elementor_data"], status=status
+        )
+    # A layout write is incomplete until CSS is regenerated (integration rule).
+    flush = await WpCli.from_credentials(creds).flush_css()
+    logger.info(
+        "wp_create_elementor_page(%s) -> page=%s sections=%s flushed=%s",
+        site_slug, page.id, page_spec["sections"], flush.ok,
+    )
+    return {
+        "status": "applied",
+        "page": page.model_dump(),
+        "sections": page_spec["sections"],
+        "css_flushed": flush.ok,
+    }
+
+
 READ_TOOLS = [wp_list_pages, wp_get_page, wp_list_posts, wp_list_menus]
 WRITE_TOOLS = [
     wp_create_page,
@@ -215,5 +256,6 @@ WRITE_TOOLS = [
     wp_install_plugin,
     wp_activate_plugin,
     wp_flush_elementor_css,
+    wp_create_elementor_page,
 ]
 WP_TOOLS = [*READ_TOOLS, *WRITE_TOOLS]

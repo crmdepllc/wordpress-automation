@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "section_type": "features",
+    "layout": "grid",
+    "scalar_slots": [],
+    "item_slots": ["title", "text"]
+  },
+  "template": {
+    "id": "feat000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "gap": "default" },
+    "elements": [
+      {
+        "id": "featcol",
+        "elType": "column",
+        "settings": { "_column_size": 33, "_inline_size": null },
+        "elements": [
+          {
+            "id": "featttl",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{item.title}}", "header_size": "h3", "align": "center" }
+          },
+          {
+            "id": "feattxt",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{item.text}}", "align": "center" }
+          }
+        ]
+      }
+    ]
+  }
+}

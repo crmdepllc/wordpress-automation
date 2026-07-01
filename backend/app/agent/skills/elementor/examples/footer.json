@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "section_type": "footer",
+    "layout": "single",
+    "scalar_slots": ["text"],
+    "item_slots": []
+  },
+  "template": {
+    "id": "ftr0000",
+    "elType": "section",
+    "settings": { "layout": "full_width" },
+    "elements": [
+      {
+        "id": "ftrcol0",
+        "elType": "column",
+        "settings": { "_column_size": 100, "_inline_size": null },
+        "elements": [
+          {
+            "id": "ftrtxt0",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{text}}", "align": "center" }
+          }
+        ]
+      }
+    ]
+  }
+}
