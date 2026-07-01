@@ -44,7 +44,7 @@ Full rationale for each tool lives in `project-overview.md` — don't re-litigat
 - `/recover` — when something breaks after one failed correction.
 - `/remember save` — when a feature spans multiple sessions.
 - `/remember restore` — when returning after a multi-session feature.
-- `/interview-me` — before implementation when requirements are unclear. Act as an LLM interviewer: ask targeted questions about project goals, workflows, edge cases, constraints, integrations, users, and success criteria to remove ambiguity and build complete project context before development begins.
+- `/interview-me` — before implementation when requirements are unclear. Act as an interviewer: ask targeted questions about project goals, workflows, edge cases, constraints, integrations, users, and success criteria to remove ambiguity and build complete project context before development begins.
 
 
 ## Working with the agent (LangGraph)

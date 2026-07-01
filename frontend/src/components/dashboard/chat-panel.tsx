@@ -6,6 +6,7 @@ import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DEFAULT_SITE_SLUG } from "@/lib/backend";
 import type { ChatUIMessage } from "@/lib/types";
 import { useTaskStore } from "@/store/task-store";
 
@@ -23,7 +24,10 @@ function messageText(message: ChatUIMessage): string {
 
 export function ChatPanel() {
   const { messages, sendMessage, status } = useChat<ChatUIMessage>({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      body: { siteSlug: DEFAULT_SITE_SLUG },
+    }),
   });
   const [input, setInput] = useState("");
   const proposePlan = useTaskStore((s) => s.proposePlan);

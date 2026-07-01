@@ -11,7 +11,7 @@ from __future__ import annotations
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Integer, String, func
+from sqlalchemy import DateTime, Enum, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, EncryptedString
@@ -47,6 +47,26 @@ class WpSite(Base):
     ssh_private_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     # WP-CLI path on the remote host / container (e.g. "wp" or an absolute path).
     wp_cli_path: Mapped[str] = mapped_column(String(255), default="wp")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Task(Base):
+    """An orchestration run. ``id`` doubles as the LangGraph checkpoint thread id,
+    so a paused (interrupted) task can be re-found and resumed after a restart."""
+
+    __tablename__ = "tasks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    site_slug: Mapped[str] = mapped_column(String(64), index=True)
+    instruction: Mapped[str] = mapped_column(Text)
+    # planning | awaiting_approval | executing | completed | rejected | error
+    status: Mapped[str] = mapped_column(String(32), default="planning")
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

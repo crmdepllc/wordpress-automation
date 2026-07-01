@@ -49,6 +49,28 @@ class Settings(BaseSettings):
     # client sites use SSH instead.
     wp_local_container: str = "wordpress-automation-wpcli-1"
 
+    # --- Orchestration graph / Celery -------------------------------------
+    # Broker + result backend for the Celery worker (long-running execution).
+    celery_broker_url: str = "redis://redis:6379/1"
+    celery_result_backend: str = "redis://redis:6379/2"
+
+    # --- LangSmith tracing (optional) -------------------------------------
+    # When langsmith_api_key is set, every graph run is traced. Left empty by
+    # default so nothing is sent without an explicit key.
+    langsmith_api_key: str = ""
+    langsmith_project: str = "wordpress-automation"
+
+    def configure_langsmith(self) -> bool:
+        """Enable LangSmith tracing if a key is configured. Returns whether on."""
+        import os
+
+        if not self.langsmith_api_key:
+            return False
+        os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+        os.environ.setdefault("LANGCHAIN_API_KEY", self.langsmith_api_key)
+        os.environ.setdefault("LANGCHAIN_PROJECT", self.langsmith_project)
+        return True
+
     # --- HTTP / CORS -------------------------------------------------------
     # Comma-separated list of allowed origins for the browser dashboard.
     cors_origins: str = "http://localhost:3000"

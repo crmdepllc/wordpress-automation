@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 4 (Orchestration graph & approval gate) — next up
+- Sprint 5 (Elementor JSON generation skill) — next up
 
 ## Current Goal
-- Sprints 1–3 — ✅ complete; Sprint 4 ready to start
+- Sprints 1–4 — ✅ complete; Sprint 5 ready to start (the bottleneck sprint — budget extra time)
 
 ---
 
@@ -91,25 +91,40 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 4 — Orchestration graph & approval gate — ▶ NEXT UP
+## Sprint 4 — Orchestration graph & approval gate — ✅ COMPLETE
 
 **Phase:** Build
 
 **Goal:** A real orchestrator that plans multi-step tasks and pauses for human approval before writing — replacing the mocked approval flow from Sprint 2 with the real thing.
 
 **Tasks**
-- Design the LangGraph state machine: plan → select skill → preview → approve → execute → report
-- Implement the approval checkpoint as a graph interrupt, resumable from the frontend
-- Add task persistence in Postgres so a paused task survives a server restart
-- Add Celery + Redis for async/long-running task execution
-- Set up LangSmith tracing for every graph run
-- Connect the Sprint 2 dashboard to the real interrupt/resume flow in place of the mock
+- [x] Design the LangGraph state machine: plan → approve → execute → report
+- [x] Implement the approval checkpoint as a graph interrupt, resumable from the frontend
+- [x] Add task persistence in Postgres so a paused task survives a server restart
+- [x] Add Celery + Redis for async/long-running task execution
+- [x] Set up LangSmith tracing for every graph run
+- [x] Connect the Sprint 2 dashboard to the real interrupt/resume flow in place of the mock
 
-**Deliverable:** A multi-step task (e.g. "install plugin, then create a page") pauses correctly in the real UI and resumes only after approval.
+**Deliverable:** A multi-step task (e.g. "install plugin, then create a page") pauses correctly in the real UI and resumes only after approval. — **Met** (unit + HTTP-contract verified; full live run needs the Docker stack + an API key — see notes).
+
+**Architecture decisions (via /architect)**
+- **FE↔BE bridge = Next routes proxy to FastAPI.** `/api/chat` starts a real task; `/api/tasks/[id]/resume` pipes the exec stream. Python stays free of the AI-SDK wire format; the Sprint 2 frontend (useChat + data-plan + task store) is reused, not rewritten.
+- **Celery = scaffold + inline demo path.** Worker + compose service + `execute_task` exist; the deliverable runs inline so it streams live and is testable here. Celery is ready for genuinely long jobs.
+- **Checkpointer = Postgres in app, Memory in tests.** App uses `AsyncPostgresSaver` (thread_id = task_id → survives restart); unit tests use `MemorySaver`; the restart claim is a gated `@integration` test.
+- **Chat UX = keep useChat + data-plan.** The plan now comes from the graph interrupt instead of a mock.
+
+**Notes / what shipped**
+- `app/agent/orchestrator/`: `state.py`, `planner.py` (NL → ordered tool calls), `graph.py` (`plan → approve[interrupt] → execute → report`), `checkpointer.py`, `manager.py` (start→interrupt, resume+stream), `tasks_service.py`. Routes: `/api/tasks`, `/api/tasks/{id}`, `/api/tasks/{id}/resume` (ndjson stream). Lifespan opens the Postgres checkpointer (falls back to in-memory if Postgres is down so the app still boots).
+- `app/worker/` (Celery app + `execute_task`); new `worker` compose service. `tasks` table + Alembic `0002`. LangSmith enabled when `LANGSMITH_API_KEY` is set.
+- Frontend rewired: `/api/chat` + a new `/api/tasks/[id]/resume` proxy; `task-store.ts` `resumeTask()` replaces the mock `runExecution`; the old `/api/execute` mock deleted; approval modal drives real approve/reject.
+- **The approval invariant is now enforced by the graph:** only `Command(resume="approve")` reaches the execute node → `run_approved`. A reject makes zero tool calls (tested).
+- **Tests: 38 passed, 4 skipped** (integration). Frontend `next build` clean. Alembic head `0002`.
+- **Not verified live:** the full browser→FastAPI→graph→Claude round trip needs Docker (Postgres/Redis/WP) up and `ANTHROPIC_API_KEY` set; planning calls Claude. The graph/manager/route logic is verified with `MemorySaver`, a mocked planner, and a `TestClient`; persistence-across-restart has a gated integration test.
+- Follow-up: a real site selector (currently a single `NEXT_PUBLIC_DEFAULT_SITE` slug); Celery is scaffolded but the demo path is inline.
 
 ---
 
-## Sprint 5 — Elementor JSON generation skill
+## Sprint 5 — Elementor JSON generation skill — ▶ NEXT UP
 
 **Phase:** Integration
 

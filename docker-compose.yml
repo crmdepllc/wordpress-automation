@@ -133,13 +133,33 @@ services:
       timeout: 5s
       retries: 5
 
+  # --- Celery worker: long-running orchestration execution ---
+  worker:
+    build: ./backend
+    command: ["uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://wpa:wpa@postgres:5432/wpa
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
   # --- Frontend: Next.js dashboard ---
   frontend:
     build: ./frontend
     depends_on:
       - backend
     environment:
+      # Browser-facing base (ping spike calls FastAPI directly).
       NEXT_PUBLIC_API_BASE: http://localhost:8000
+      # Server-side target for the Next.js API-route proxies (container network).
+      BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_DEFAULT_SITE: sandbox
     ports:
       - "3000:3000"
 

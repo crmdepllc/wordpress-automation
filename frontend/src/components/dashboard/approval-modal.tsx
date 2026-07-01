@@ -10,14 +10,14 @@ import {
   DialogDescription,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { runExecution, useTaskStore } from "@/store/task-store";
+import { resumeTask, useTaskStore } from "@/store/task-store";
 
 // The human approval gate. No write happens until the user clicks Approve —
-// this mock mirrors the real LangGraph interrupt that Sprint 4 wires in.
+// this drives the real LangGraph interrupt: approve/reject resumes the paused
+// graph on the backend, which only then executes (or reports rejection).
 export function ApprovalModal() {
   const status = useTaskStore((s) => s.status);
   const plan = useTaskStore((s) => s.plan);
-  const reject = useTaskStore((s) => s.reject);
 
   const open = status === "awaiting_approval" && plan !== null;
 
@@ -60,15 +60,11 @@ export function ApprovalModal() {
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={reject}>
+          <Button variant="outline" onClick={() => void resumeTask("reject")}>
             <X className="size-4" />
             Reject
           </Button>
-          <Button
-            onClick={() => {
-              if (plan) void runExecution(plan);
-            }}
-          >
+          <Button onClick={() => void resumeTask("approve")}>
             <Check className="size-4" />
             Approve &amp; run
           </Button>

@@ -20,6 +20,8 @@ export type PlanStep = {
 
 /** The plan the agent proposes before any write happens. */
 export type Plan = {
+  /** Backend task/thread id — used to resume the graph after approval. */
+  taskId?: string;
   summary: string;
   steps: PlanStep[];
 };
