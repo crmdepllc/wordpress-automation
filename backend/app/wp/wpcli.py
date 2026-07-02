@@ -126,3 +126,40 @@ class WpCli:
     async def flush_css(self) -> CliResult:
         """Regenerate Elementor CSS — run after every layout write."""
         return await self._executor.run(["elementor", "flush-css"])
+
+    async def search_plugin(self, query: str, *, limit: int = 10) -> CliResult:
+        """Search the plugin directory. Read-only."""
+        return await self._executor.run(
+            [
+                "plugin",
+                "search",
+                query,
+                "--format=json",
+                "--fields=name,slug,rating",
+                f"--per-page={limit}",
+            ]
+        )
+
+    async def set_option(self, name: str, value: str) -> CliResult:
+        """Set a WordPress option (used to configure plugins)."""
+        return await self._executor.run(["option", "update", name, value])
+
+    async def set_theme_mod(self, name: str, value: str) -> CliResult:
+        """Set a theme modification (Customizer setting) for the active theme."""
+        return await self._executor.run(["theme", "mod", "set", name, value])
+
+    async def get_option(self, name: str) -> CliResult:
+        """Read a WordPress option (e.g. the active Elementor kit id)."""
+        return await self._executor.run(["option", "get", name])
+
+    async def update_post_meta(self, post_id: int, key: str, value: str) -> CliResult:
+        """Set a single post-meta value (used for Elementor kit settings)."""
+        return await self._executor.run(
+            ["post", "meta", "update", str(post_id), key, value]
+        )
+
+    async def get_post_meta(self, post_id: int, key: str) -> CliResult:
+        """Read a single post-meta value as JSON."""
+        return await self._executor.run(
+            ["post", "meta", "get", str(post_id), key, "--format=json"]
+        )

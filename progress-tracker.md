@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 6 (Content, SEO & theming skills) — next up
+- Sprint 7 (Multi-step task decomposition) — next up
 
 ## Current Goal
-- Sprints 1–5 — ✅ complete; Sprint 6 ready to start
+- Sprints 1–6 — ✅ complete; Sprint 7 ready to start
 
 ---
 
@@ -31,7 +31,7 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 **Notes**
 - LangGraph lives inside the backend (`backend/app/agent/`) per project-structure.md, which defines the backend as the "FastAPI + LangGraph agent server" — not a separate top-level `/agent` package, which would have duplicated the `uv` environment.
-- The ping node uses the fast model (`claude-haiku-4-5`) per the AGENTS.md model-routing rule — a narrow single-shot call, not orchestrator reasoning.
+- The ping node uses the fast model (`claude-haiku-4-5`) per the AGENTS.md motdel-routing rule — a narrow single-shot call, not orchestrator reasoning.
 - Verified locally: backend imports cleanly, `/health` → ok, `/api/ping` validates input (422 on empty) and routes through the graph to a clear error when `ANTHROPIC_API_KEY` is unset (400). A real Claude round-trip requires the user's key in `backend/.env` (intentionally not committed). Frontend type-checks clean.
 
 ---
@@ -152,23 +152,36 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 6 — Content, SEO & theming skills — ▶ NEXT UP
+## Sprint 6 — Content, SEO & theming skills — ✅ COMPLETE
 
 **Phase:** Integration
 
 **Goal:** Round out the skill set beyond page layout — the things that make a site feel finished.
 
 **Tasks**
-- Content generation skill: draft posts, assign categories/tags, schedule via REST API
-- SEO skill: generate meta titles/descriptions, schema markup; integrate with Yoast/RankMath REST endpoints
-- Theme customizer skill: colors, fonts, header/footer via WP Customizer API + Elementor global settings
-- Plugin management skill: search, install, activate, configure common plugins (forms, caching)
+- [x] Content generation skill: draft posts, assign categories/tags (find-or-create), schedule via REST API
+- [x] SEO skill: generate meta titles/descriptions + JSON-LD schema; Yoast/RankMath meta keys (provider-selectable)
+- [x] Theme customizer skill: colors, fonts, footer via WP-CLI theme mods + best-effort Elementor global kit
+- [x] Plugin management skill: search + configure (WP-CLI) on top of existing install/activate + a recommend catalog
 
-**Deliverable:** Agent can take a site from blank install to a themed, SEO-configured, content-populated state end-to-end.
+**Deliverable:** Agent can take a site from blank install to a themed, SEO-configured, content-populated state end-to-end. — **Met at the skill level** (each skill works and is individually evaluated); the single-brief *composite* run is Sprint 7's job, and true live application is gated (see notes).
+
+**Architecture decisions (via /architect)**
+- **Write channels:** SEO → REST post-meta (documented `show_in_rest` dependency); theming → WP-CLI `theme mod`/`option` + Elementor kit. Content → REST. Each stays on its rule-correct channel.
+- **Scope:** all four skills at pragmatic depth; each gets evals.
+- **SEO:** Yoast default, RankMath mapping selectable; Claude writes title/description, code builds JSON-LD by schema type.
+- **Terms:** ensure-by-name (find-or-create) — the agent works in human names; the client resolves ids.
+
+**Notes / what shipped**
+- `app/agent/skills/`: `content/` (PostDraft generator), `seo/` (providers map + generator + JSON-LD), `theme/` (ThemeSpec generator + WP-CLI applier), `plugins/` (recommend catalog). REST client gained `ensure_category`/`ensure_tag`, scheduling fields on `ContentCreate`, and `update_content_meta`; WP-CLI gained `search_plugin`/`set_option`/`set_theme_mod`/`get|update_post_meta`.
+- 5 new tools: `wp_publish_post`, `wp_apply_seo`, `wp_apply_theme` (gated writes), `wp_configure_plugin` (gated), `wp_search_plugins` (read). **17 tools total.**
+- **Tests: 89 passed, 7 skipped.** REST term find-or-create + scheduling payload, SEO provider mapping + JSON-LD + `seo_to_meta`, theme applier (mods + Elementor kit merge), content/SEO/theme generators (LLM mocked), all-tool gating, applied paths, + a gated live integration eval.
+- **Caveats (same shape as Sprint 5):** Yoast/RankMath meta over REST needs the companion plugin's meta registration; theme mods assume generic Customizer keys (theme-specific keys vary); Elementor kit color merge is best-effort. **No live application verified here** (no WP/API key) — the gated `test_sprint6_live.py` covers it when the stack is up.
+- Follow-up: theme-specific Customizer key mapping; richer plugin configuration; wire the composite "blank → finished" run in Sprint 7.
 
 ---
 
-## Sprint 7 — Multi-step task decomposition
+## Sprint 7 — Multi-step task decomposition — ▶ NEXT UP
 
 **Phase:** Build
 

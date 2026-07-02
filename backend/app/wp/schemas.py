@@ -66,8 +66,13 @@ class ContentCreate(BaseModel):
 
     title: str
     content: str = ""
-    status: Literal["draft", "publish", "pending", "private"] = "draft"
+    status: Literal["draft", "publish", "pending", "private", "future"] = "draft"
     slug: str | None = None
+    # Term ids (resolved from names by the client's ensure_* helpers).
+    categories: list[int] = Field(default_factory=list)
+    tags: list[int] = Field(default_factory=list)
+    # ISO-8601 publish time; when set with status="future", WP schedules the post.
+    date: str | None = None
 
     def to_api(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -77,6 +82,12 @@ class ContentCreate(BaseModel):
         }
         if self.slug:
             body["slug"] = self.slug
+        if self.categories:
+            body["categories"] = self.categories
+        if self.tags:
+            body["tags"] = self.tags
+        if self.date:
+            body["date"] = self.date
         return body
 
 

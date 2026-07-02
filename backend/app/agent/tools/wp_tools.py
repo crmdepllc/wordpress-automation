@@ -247,7 +247,140 @@ async def wp_create_elementor_page(
     }
 
 
-READ_TOOLS = [wp_list_pages, wp_get_page, wp_list_posts, wp_list_menus]
+# --- Sprint 6 skills: content / SEO / theming / plugins -----------------
+
+
+@tool
+async def wp_publish_post(
+    site_slug: str,
+    brief: str,
+    categories: list[str] | None = None,
+    tags: list[str] | None = None,
+    status: str = "draft",
+    publish_at: str | None = None,
+    approved: bool = False,
+) -> dict[str, Any]:
+    """Draft a blog post from a brief, assign categories/tags (created if missing),
+    and publish or schedule it. WRITE — requires approved=True."""
+    if not approved:
+        return _needs_approval(
+            "publish post", {"site": site_slug, "brief": brief, "status": status}
+        )
+    from app.agent.skills.content import generate_post_draft
+
+    draft = await generate_post_draft(brief)
+    cat_names = list(dict.fromkeys([*(categories or []), *draft.categories]))
+    tag_names = list(dict.fromkeys([*(tags or []), *draft.tags]))
+
+    creds = await _credentials(site_slug)
+    async with WordPressRestClient.from_credentials(creds) as wp:
+        cat_ids = await wp.ensure_categories(cat_names)
+        tag_ids = await wp.ensure_tags(tag_names)
+        post = await wp.create_post(
+            ContentCreate(
+                title=draft.title,
+                content=draft.content,
+                status="future" if publish_at else status,  # type: ignore[arg-type]
+                categories=cat_ids,
+                tags=tag_ids,
+                date=publish_at,
+            )
+        )
+    logger.info("wp_publish_post(%s) -> id=%s", site_slug, post.id)
+    return {
+        "status": "applied",
+        "post": post.model_dump(),
+        "categories": cat_names,
+        "tags": tag_names,
+        "scheduled_for": publish_at,
+    }
+
+
+@tool
+async def wp_apply_seo(
+    site_slug: str,
+    target_id: int,
+    subject: str,
+    target_type: str = "post",
+    provider: str = "yoast",
+    approved: bool = False,
+) -> dict[str, Any]:
+    """Generate an SEO title/description + JSON-LD for a page/post and write it
+    as provider (Yoast/RankMath) meta. WRITE — requires approved=True."""
+    if not approved:
+        return _needs_approval(
+            "apply SEO", {"site": site_slug, "target": f"{target_type}:{target_id}"}
+        )
+    from app.agent.skills.seo import generate_seo, seo_to_meta
+
+    creds = await _credentials(site_slug)
+    seo = await generate_seo(subject)
+    resource = "pages" if target_type == "page" else "posts"
+    async with WordPressRestClient.from_credentials(creds) as wp:
+        item = (
+            await wp.get_page(target_id)
+            if target_type == "page"
+            else await wp.get_post(target_id)
+        )
+        meta = seo_to_meta(
+            seo, provider=provider, name=item.title, url=item.link or creds.base_url
+        )
+        await wp.update_content_meta(resource, target_id, meta)
+    return {"status": "applied", "seo": seo.model_dump(), "meta_keys": list(meta)}
+
+
+@tool
+async def wp_apply_theme(
+    site_slug: str, brief: str, approved: bool = False
+) -> dict[str, Any]:
+    """Generate a theme (palette, fonts, footer) from a brief and apply it via
+    WP-CLI theme mods + the Elementor global kit. WRITE — requires approved=True."""
+    if not approved:
+        return _needs_approval("apply theme", {"site": site_slug, "brief": brief})
+    from app.agent.skills.theme import apply_theme, generate_theme
+
+    creds = await _credentials(site_slug)
+    spec = await generate_theme(brief)
+    results = await apply_theme(WpCli.from_credentials(creds), spec)
+    logger.info("wp_apply_theme(%s) -> %d steps", site_slug, len(results))
+    return {"status": "applied", "theme": spec.model_dump(), "results": results}
+
+
+@tool
+async def wp_search_plugins(site_slug: str, query: str) -> dict[str, Any]:
+    """Search the WordPress plugin directory and suggest a common match. Read-only."""
+    from app.agent.skills.plugins import recommend_plugin
+
+    creds = await _credentials(site_slug)
+    result = await WpCli.from_credentials(creds).search_plugin(query)
+    return {
+        "status": "ok",
+        "recommended": recommend_plugin(query),
+        "results": result.stdout[:2000],
+    }
+
+
+@tool
+async def wp_configure_plugin(
+    site_slug: str, option_name: str, option_value: str, approved: bool = False
+) -> dict[str, Any]:
+    """Configure a plugin by setting a WordPress option via WP-CLI. WRITE — requires approved=True."""
+    if not approved:
+        return _needs_approval(
+            "configure plugin", {"site": site_slug, "option": option_name}
+        )
+    creds = await _credentials(site_slug)
+    result = await WpCli.from_credentials(creds).set_option(option_name, option_value)
+    return {"status": "applied" if result.ok else "error", "result": result.model_dump()}
+
+
+READ_TOOLS = [
+    wp_list_pages,
+    wp_get_page,
+    wp_list_posts,
+    wp_list_menus,
+    wp_search_plugins,
+]
 WRITE_TOOLS = [
     wp_create_page,
     wp_update_page,
@@ -257,5 +390,9 @@ WRITE_TOOLS = [
     wp_activate_plugin,
     wp_flush_elementor_css,
     wp_create_elementor_page,
+    wp_publish_post,
+    wp_apply_seo,
+    wp_apply_theme,
+    wp_configure_plugin,
 ]
 WP_TOOLS = [*READ_TOOLS, *WRITE_TOOLS]

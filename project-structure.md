@@ -2,7 +2,7 @@
 
 This document describes the layout of the **WordPress Automation** repository — an AI agent system that builds and manages WordPress/Elementor sites from natural-language instructions. For the intended end-state architecture and the role each technology plays, see [project-overview.md](project-overview.md).
 
-> **Current state:** Sprints 1–5 complete. The backend has a LangGraph "ping" node (Sprint 1); a typed WordPress tool layer — REST client, pluggable WP-CLI executor, encrypted credentials, approval-gated tools (Sprint 3); a real orchestration graph (`plan → approve[interrupt] → execute → report`) with Postgres-checkpointed state, `/api/tasks` endpoints, and a Celery worker (Sprint 4); and an Elementor page-generation skill (brief → constrained IR → deterministic builder → validated `_elementor_data` → REST write + CSS flush) exposed as a gated tool (Sprint 5). The frontend dashboard (Sprint 2) is wired off its mocks onto the real interrupt/resume flow. The whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
+> **Current state:** Sprints 1–6 complete. The backend has a LangGraph "ping" node (Sprint 1); a typed WordPress tool layer — REST client, pluggable WP-CLI executor, encrypted credentials, approval-gated tools (Sprint 3); a real orchestration graph (`plan → approve[interrupt] → execute → report`) with Postgres-checkpointed state, `/api/tasks` endpoints, and a Celery worker (Sprint 4); an Elementor page-generation skill (Sprint 5); and content/SEO/theming/plugin skills (Sprint 6) — **17 gated tools** the planner can compose. The frontend dashboard (Sprint 2) is wired off its mocks onto the real interrupt/resume flow. The whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
 
 ## Top-level layout
 
@@ -110,14 +110,18 @@ backend/
     │   │   └── wp_tools.py# Typed WP tools; writes require approved=True (incl. wp_create_elementor_page)
     │   ├── skills/        # Composable capabilities (Sprint 5+)
     │   │   ├── __init__.py
-    │   │   └── elementor/ # Brief → validated Elementor _elementor_data
-    │   │       ├── schema.py    # PageSpec/SectionSpec IR (what Claude fills)
-    │   │       ├── library.py   # Loads the section example templates + catalog
-    │   │       ├── builder.py   # IR → _elementor_data (token fill, grid clone, id regen)
-    │   │       ├── validator.py # Structural + semantic checks before any write
-    │   │       ├── generator.py # Brief → PageSpec via Claude (lazy, structured output)
-    │   │       ├── skill.py     # generate → build → validate pipeline
-    │   │       └── examples/    # Seeded section templates (reference scaffolds) + README
+    │   │   ├── elementor/ # Brief → validated Elementor _elementor_data
+    │   │   │   ├── schema.py    # PageSpec/SectionSpec IR (what Claude fills)
+    │   │   │   ├── library.py   # Loads the section example templates + catalog
+    │   │   │   ├── builder.py   # IR → _elementor_data (token fill, grid clone, id regen)
+    │   │   │   ├── validator.py # Structural + semantic checks before any write
+    │   │   │   ├── generator.py # Brief → PageSpec via Claude (lazy, structured output)
+    │   │   │   ├── skill.py     # generate → build → validate pipeline
+    │   │   │   └── examples/    # Seeded section templates (reference scaffolds) + README
+    │   │   ├── content/   # Brief → PostDraft (title/body/terms) via Claude
+    │   │   ├── seo/       # Subject → SeoMeta + JSON-LD; Yoast/RankMath meta keys
+    │   │   ├── theme/     # Brief → ThemeSpec; applied via WP-CLI mods + Elementor kit
+    │   │   └── plugins/   # Intent → recommended plugin slug (catalog)
     │   └── orchestrator/  # Sprint 4 state machine
     │       ├── __init__.py
     │       ├── state.py       # OrchestratorState + PlannedStep + ExecEvent
@@ -139,10 +143,11 @@ backend/
 - **Agent tools ([app/agent/tools/wp_tools.py](backend/app/agent/tools/wp_tools.py)):** each capability is a typed LangChain `@tool`. Read tools run freely; **write tools refuse to act unless `approved=True`**. `run_approved` (in [wp_agent.py](backend/app/agent/wp_agent.py)) is the only path that grants approval, and the orchestrator's execute node is the only caller.
 - **Orchestration graph ([app/agent/orchestrator/](backend/app/agent/orchestrator/)):** the Sprint 4 state machine `plan → approve → execute → report`. `approve` calls `interrupt(plan)` so the graph pauses with state persisted by `AsyncPostgresSaver`; a `Command(resume=decision)` continues it. `TaskManager` starts a run to the interrupt and resumes it, streaming a live event per tool call. The checkpoint thread id = the task id, so a paused task survives a restart. `/api/tasks` exposes start/detail/resume; the Next.js routes proxy to them.
 - **Elementor skill ([app/agent/skills/elementor/](backend/app/agent/skills/elementor/)):** brief → validated `_elementor_data`. Claude fills a constrained `PageSpec` IR (never raw JSON); a deterministic builder compiles it from the real section templates in `examples/`, regenerating ids; a validator rejects malformed structures before any write. Exposed as the gated `wp_create_elementor_page` tool, which writes via REST then auto-runs `wp elementor flush-css`. The seeded templates are **reference scaffolds** — per AGENTS.md rule #3 they should be replaced with genuine editor exports, which the gated render eval verifies.
+- **Content / SEO / theming / plugin skills ([app/agent/skills/](backend/app/agent/skills/)):** Sprint 6 rounds out the agent. **content** → a `PostDraft` written via REST with find-or-create categories/tags + optional scheduling (`wp_publish_post`); **seo** → meta title/description + JSON-LD written as Yoast/RankMath post-meta over REST (`wp_apply_seo`); **theme** → a `ThemeSpec` applied via WP-CLI theme mods + a best-effort Elementor kit merge (`wp_apply_theme`); **plugins** → search + configure via WP-CLI (`wp_search_plugins` read, `wp_configure_plugin` write) with a recommend catalog. All writes are gated. SEO/theme meta rely on the companion plugin registering keys / the Customizer being CLI-driven — the same live-gated caveat as Elementor. **17 tools total** now.
 - **Celery worker ([app/worker/](backend/app/worker/)):** scaffolding for long-running execution — `execute_task` resumes a persisted task off the request path against the shared Postgres checkpoint. The Sprint 4 demo path runs inline (so it streams live); the worker is ready for genuinely long jobs.
 - **Config / secrets:** [backend/app/config.py](backend/app/config.py) reads all settings (API key, models, DB/Redis URLs, `CREDENTIAL_ENCRYPTION_KEY`, Celery URLs, optional `LANGSMITH_API_KEY`, CORS) from the environment / `.env`. Credentials are Fernet-encrypted at rest; nothing is hardcoded.
-- **Tests:** `pytest` — unit tests mock httpx (`respx`), SSH/subprocess, the LLM, and the DB, and use `MemorySaver` for the graph, so they pass without Docker. Integration tests are `@pytest.mark.integration` and self-skip when Docker/Postgres/WP is unavailable. **66 passing, 5 skipped.**
-- **Planned components** _(per overview, not yet present)_: content/SEO/theming skills (Sprint 6), multi-step brief decomposition (Sprint 7), pgvector recall.
+- **Tests:** `pytest` — unit tests mock httpx (`respx`), SSH/subprocess, the LLM, and the DB, and use `MemorySaver` for the graph, so they pass without Docker. Integration tests are `@pytest.mark.integration` and self-skip when Docker/Postgres/WP is unavailable. **89 passing, 7 skipped.**
+- **Planned components** _(per overview, not yet present)_: multi-step brief decomposition + rollback/snapshots (Sprint 7), eval suite & CI scoring (Sprint 8), pgvector recall.
 
 ## Frontend (`frontend/`)
 

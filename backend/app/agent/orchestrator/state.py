@@ -7,7 +7,14 @@ from typing import Any, Literal, TypedDict
 from pydantic import BaseModel
 
 # WP-CLI-backed tools write through SSH/CLI; everything else is REST.
-_WPCLI_TOOLS = {"wp_install_plugin", "wp_activate_plugin", "wp_flush_elementor_css"}
+_WPCLI_TOOLS = {
+    "wp_install_plugin",
+    "wp_activate_plugin",
+    "wp_flush_elementor_css",
+    "wp_apply_theme",
+    "wp_search_plugins",
+    "wp_configure_plugin",
+}
 
 Channel = Literal["REST API", "WP-CLI"]
 

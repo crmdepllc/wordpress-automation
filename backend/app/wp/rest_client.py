@@ -217,3 +217,43 @@ class WordPressRestClient:
         await self._request(
             "DELETE", f"/menus/{menu_id}", params={"force": str(force).lower()}
         )
+
+    # --- taxonomy terms (categories / tags) -----------------------------
+
+    async def _ensure_term(self, taxonomy: str, name: str) -> int:
+        """Find a term by exact name (case-insensitive) or create it; return its id."""
+        found = await self._request(
+            "GET", f"/{taxonomy}", params={"search": name, "per_page": 100}
+        )
+        for term in found or []:
+            if str(term.get("name", "")).lower() == name.lower():
+                return int(term["id"])
+        created = await self._request("POST", f"/{taxonomy}", json={"name": name})
+        return int(created["id"])
+
+    async def ensure_category(self, name: str) -> int:
+        return await self._ensure_term("categories", name)
+
+    async def ensure_tag(self, name: str) -> int:
+        return await self._ensure_term("tags", name)
+
+    async def ensure_categories(self, names: list[str]) -> list[int]:
+        return [await self.ensure_category(n) for n in names]
+
+    async def ensure_tags(self, names: list[str]) -> list[int]:
+        return [await self.ensure_tag(n) for n in names]
+
+    # --- post/page meta (used by the SEO skill) -------------------------
+
+    async def update_content_meta(
+        self, resource: str, item_id: int, meta: dict[str, Any]
+    ) -> ContentItem:
+        """Set meta fields on a post/page.
+
+        NOTE: like ``_elementor_data``, provider meta keys (e.g. Yoast's
+        ``_yoast_wpseo_*``) must be registered with ``show_in_rest`` — the
+        companion plugin does this — or WordPress silently ignores them.
+        """
+        return ContentItem.from_api(
+            await self._request("POST", f"/{resource}/{item_id}", json={"meta": meta})
+        )
