@@ -18,6 +18,7 @@ from app.wp.schemas import (
     ContentUpdate,
     MediaItem,
     MenuItem,
+    MenuItemEntry,
     SiteCredentials,
 )
 
@@ -216,6 +217,23 @@ class WordPressRestClient:
     async def delete_menu(self, menu_id: int, *, force: bool = True) -> None:
         await self._request(
             "DELETE", f"/menus/{menu_id}", params={"force": str(force).lower()}
+        )
+
+    async def create_menu_item(
+        self, menu_id: int, *, page_id: int, title: str, menu_order: int = 0
+    ) -> MenuItemEntry:
+        """Attach a page to a nav menu as a menu item."""
+        body = {
+            "title": title,
+            "status": "publish",
+            "type": "post_type",
+            "object": "page",
+            "object_id": page_id,
+            "menu_order": menu_order,
+            "menus": menu_id,
+        }
+        return MenuItemEntry.from_api(
+            await self._request("POST", "/menu-items", json=body)
         )
 
     # --- taxonomy terms (categories / tags) -----------------------------

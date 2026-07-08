@@ -299,7 +299,7 @@ async def wp_publish_post(
 @tool
 async def wp_apply_seo(
     site_slug: str,
-    target_id: int,
+    target_id: int | str,
     subject: str,
     target_type: str = "post",
     provider: str = "yoast",
@@ -374,6 +374,38 @@ async def wp_configure_plugin(
     return {"status": "applied" if result.ok else "error", "result": result.model_dump()}
 
 
+@tool
+async def wp_assemble_menu(
+    site_slug: str,
+    menu_name: str,
+    page_refs: list[int | str],
+    approved: bool = False,
+) -> dict[str, Any]:
+    """Create a nav menu and attach the given pages to it, in order.
+
+    ``page_refs`` are page ids (existing pages, or the ids of pages created
+    earlier in the same plan). WRITE — requires approved=True.
+    """
+    if not approved:
+        return _needs_approval(
+            "assemble menu", {"site": site_slug, "menu": menu_name, "pages": page_refs}
+        )
+    creds = await _credentials(site_slug)
+    async with WordPressRestClient.from_credentials(creds) as wp:
+        menu = await wp.create_menu(menu_name)
+        items: list[dict[str, Any]] = []
+        for order, page_ref in enumerate(page_refs):
+            page = await wp.get_page(int(page_ref))
+            item = await wp.create_menu_item(
+                menu.id, page_id=page.id, title=page.title, menu_order=order
+            )
+            items.append(item.model_dump())
+    logger.info(
+        "wp_assemble_menu(%s) -> menu=%s items=%d", site_slug, menu.id, len(items)
+    )
+    return {"status": "applied", "menu": menu.model_dump(), "items": items}
+
+
 READ_TOOLS = [
     wp_list_pages,
     wp_get_page,
@@ -394,5 +426,6 @@ WRITE_TOOLS = [
     wp_apply_seo,
     wp_apply_theme,
     wp_configure_plugin,
+    wp_assemble_menu,
 ]
 WP_TOOLS = [*READ_TOOLS, *WRITE_TOOLS]

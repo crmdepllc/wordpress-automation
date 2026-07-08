@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -120,6 +122,29 @@ async def test_menu_create_and_list():
         menus = await wp.list_menus()
     assert created.name == "Main"
     assert menus[0].id == 3
+
+
+@respx.mock
+async def test_create_menu_item_attaches_page():
+    route = respx.post(f"{ROOT}/menu-items").mock(
+        return_value=httpx.Response(
+            201, json={"id": 11, "title": {"rendered": "About"}, "object_id": 42}
+        )
+    )
+    async with client() as wp:
+        item = await wp.create_menu_item(3, page_id=42, title="About", menu_order=1)
+    assert item.id == 11
+    assert item.object_id == 42
+    body = json.loads(route.calls.last.request.content)
+    assert body == {
+        "title": "About",
+        "status": "publish",
+        "type": "post_type",
+        "object": "page",
+        "object_id": 42,
+        "menu_order": 1,
+        "menus": 3,
+    }
 
 
 @respx.mock

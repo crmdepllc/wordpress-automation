@@ -135,6 +135,22 @@ class MenuItem(BaseModel):
         )
 
 
+class MenuItemEntry(BaseModel):
+    """A single item attached to a nav menu (e.g. a page link)."""
+
+    id: int
+    title: str = ""
+    object_id: int = 0
+
+    @classmethod
+    def from_api(cls, data: dict[str, Any]) -> "MenuItemEntry":
+        return cls(
+            id=int(data["id"]),
+            title=_rendered(data.get("title")),
+            object_id=int(data.get("object_id") or 0),
+        )
+
+
 # --- WP-CLI --------------------------------------------------------------
 
 

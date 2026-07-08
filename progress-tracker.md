@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 7 (Multi-step task decomposition) — next up
+- Sprint 8 (Eval suite & quality scoring) — next up
 
 ## Current Goal
-- Sprints 1–6 — ✅ complete; Sprint 7 ready to start
+- Sprints 1–7 — ✅ complete; Sprint 8 ready to start
 
 ---
 
@@ -181,19 +181,37 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 7 — Multi-step task decomposition — ▶ NEXT UP
+## Sprint 7 — Multi-step task decomposition — ✅ COMPLETE
 
 **Phase:** Build
 
 **Goal:** Handle a full brief ("build me a 5-page site") by decomposing it into an ordered task graph automatically.
 
 **Tasks**
-- Build the orchestrator-level planning step: brief → ordered list of skill invocations with dependencies
-- Handle dependency ordering (theme before content, pages before menu assembly)
-- Add a rollback/snapshot mechanism before each major write (WP DB export beforehand)
-- Add partial-failure handling: if step 3 of 7 fails, surface it clearly rather than silently continuing
+- [x] Build the orchestrator-level planning step: brief → ordered list of skill invocations with dependencies
+- [x] Handle dependency ordering (theme before content, pages before menu assembly)
+- [x] Add a rollback/snapshot mechanism before each major write (WP DB export beforehand)
+- [x] Add partial-failure handling: if step 3 of 7 fails, surface it clearly rather than silently continuing
 
-**Deliverable:** A single brief produces a multi-page site with menu, theme, and SEO applied in correct order, unattended after one approval.
+**Deliverable:** A single brief produces a multi-page site with menu, theme, and SEO applied in correct order, unattended after one approval. — **Met** (unit-verified end to end; live multi-page run needs the Docker stack + an API key — see notes).
+
+**Architecture decisions (via /architect)**
+- **Dependency source = deterministic category table, not LLM-authored.** The LLM still proposes steps via tool calls (unchanged); code tags each step with a `category` (plugin/theme/page/content/seo/menu) and computes `depends_on` from a fixed precedence table (`plugin → theme → page → content → seo → menu`), then topologically sorts. Mirrors the constrained-IR pattern from the Elementor skill — the model never hand-authors a graph structure that could reference invalid ids or cycle.
+- **Cross-step refs = `"$ref:step-id:path"` strings, resolved at execution.** A step that targets content created earlier in the same plan (SEO on a page just created, a menu collecting new pages) uses a `$ref` string instead of a guessed id; `execute_node` resolves it against the referencing step's real result immediately before invoking the tool. Tool schemas widen the relevant id args to `int | str` so the ref string passes validation; gated write tools check `approved` before ever touching the value, so unresolved refs are inert during planning/preview.
+- **Rollback = one snapshot, no auto-restore.** A single `wp db export` runs once, right after approval and before the first write (not per-step) — halting on first failure already bounds the blast radius, so one restore point covers it. Restoring it is left to a human (`wp db import`); the agent never runs a second unattended destructive DB operation after a failure. A snapshot failure is logged and surfaced but does not block already-approved writes.
+- **Failure mode = halt immediately, mark the rest skipped.** The first failed step stops execution; every remaining step (whether or not it depended on the failure) is reported `skipped`, never silently attempted. The final report's `outcome` is `"failed"` (not `"completed"`) whenever anything failed.
+- **Menu assembly built for real.** `wp_assemble_menu` creates a nav menu via the existing `create_menu` REST method and attaches pages as menu items via a new `create_menu_item` REST wrapper (`POST /menu-items`) — needed for the deliverable to be literally true, not just illustrative.
+
+**Notes / what shipped**
+- `app/agent/orchestrator/state.py`: `Category`/`CATEGORY_PRECEDENCE`/`category_for_tool()`; `PlannedStep.category` + `PlannedStep.depends_on`; `OrchestratorState.snapshot`; `ExecEvent.status` gained `"skipped"`.
+- `app/agent/orchestrator/planner.py`: new `_decompose()` — tags categories, computes `depends_on` from precedence + any `$ref` tokens found in a step's args, topologically orders (Kahn's algorithm, stable on emission order). System prompt documents the `$ref:step-id:path` convention.
+- `app/agent/orchestrator/graph.py`: new `snapshot` node between `approve` and `execute` (skips itself when the plan has no writes; failures are caught and non-fatal); `resolve_refs()` substitutes `$ref` tokens from prior steps' real results; `execute_node` now halts on the first failed step and marks the remainder `skipped`; `report_node` adds `skipped` to the count and sets `outcome: "failed"` when anything failed.
+- `app/wp/wpcli.py`: `WpCli.export_db(filename)` (`wp db export`) — the snapshot file stays on the WP-CLI target's own filesystem, referenced by name in the report, never downloaded into our infrastructure.
+- `app/wp/rest_client.py` / `schemas.py`: `create_menu_item()` (`MenuItemEntry`).
+- `app/agent/tools/wp_tools.py`: new gated `wp_assemble_menu` tool (create menu + attach pages, fetching each page's real title); `wp_apply_seo.target_id` widened to `int | str` to accept `$ref` strings. **18 tools total** (13 gated writes).
+- **Tests: 102 passed, 4 skipped** (existing count grows to reflect new coverage — decompose ordering + `$ref` dependency + menu-depends-on-pages/content in `test_planner.py`; snapshot taken/skipped/non-fatal-failure + halt-on-failure + skip-marking in `test_orchestrator_graph.py`; `wp_assemble_menu` gating/applied/resolved-ref-input in `test_tools.py`; `export_db` args in `test_wpcli.py`; `create_menu_item` payload in `test_rest_client.py`). One unrelated pre-existing failure (`test_local_docker_executor_command`) reproduces identically on `main` before this sprint's changes — a local Docker-environment mismatch, not a regression.
+- **Not verified live:** a real multi-page run (pages → theme → content → SEO → menu, with `$ref`-linked ids resolving against real WP responses) needs the Docker stack + an Anthropic key. Unit tests cover the decomposition, ref-resolution, snapshot, and halt/skip logic with the DB/WP-CLI/REST layers mocked.
+- Follow-up: the eval suite (Sprint 8) should add at least one golden "full brief → multi-page site" scenario exercising the real chain end-to-end against the sandboxed WP instance.
 
 ---
 

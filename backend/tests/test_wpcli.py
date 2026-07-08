@@ -64,6 +64,13 @@ async def test_wpcli_builds_install_args():
     assert rec.calls[2] == ["elementor", "flush-css"]
 
 
+async def test_wpcli_export_db_builds_args():
+    rec = RecordingExecutor()
+    result = await WpCli(rec).export_db("snapshot-acme-20260709.sql")
+    assert rec.calls[0] == ["db", "export", "snapshot-acme-20260709.sql"]
+    assert result.ok
+
+
 async def test_local_docker_executor_command(monkeypatch):
     captured: dict[str, object] = {}
 

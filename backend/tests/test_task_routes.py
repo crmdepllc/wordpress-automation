@@ -69,11 +69,16 @@ def client(monkeypatch):
     async def _fake_run_approved(tool, args):
         return {"status": "applied"}
 
+    async def _fake_site_credentials(site_slug):
+        raise LookupError("no site registered in this unit test")
+
     monkeypatch.setattr(manager_mod, "create_task", _noop_create)
     monkeypatch.setattr(manager_mod, "set_status", _noop_status)
     monkeypatch.setattr(task_routes, "get_task", _fake_get_task)
     monkeypatch.setattr(task_routes, "get_sessionmaker", lambda: (lambda: _DummySession()))
     monkeypatch.setattr(graph_mod, "run_approved", _fake_run_approved)
+    # Snapshot degrades gracefully without a DB; mock it for a fast, hermetic test.
+    monkeypatch.setattr(graph_mod, "_site_credentials", _fake_site_credentials)
 
     async def _fake_session():
         yield _DummySession()

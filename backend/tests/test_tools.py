@@ -7,7 +7,7 @@ import pytest
 import app.agent.tools.wp_tools as wp_tools
 from app.agent.tools import wp_tools as tools_mod
 from app.agent.wp_agent import run_approved
-from app.wp.schemas import CliResult, ContentItem, SiteCredentials
+from app.wp.schemas import CliResult, ContentItem, MenuItem, MenuItemEntry, SiteCredentials
 
 
 @pytest.fixture
@@ -130,3 +130,77 @@ def test_tool_schemas_have_site_slug():
     # Every tool exposes a typed schema including site_slug.
     for tool in tools_mod.WP_TOOLS:
         assert "site_slug" in tool.args_schema.model_json_schema()["properties"]
+
+
+# --- wp_assemble_menu (Sprint 7) -----------------------------------------
+
+
+class FakeMenuWp:
+    """Stand-in REST client for the menu-assembly tool."""
+
+    created_items: list[dict] | None = None
+
+    @classmethod
+    def from_credentials(cls, creds, **kwargs):
+        return cls()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    async def create_menu(self, name):
+        return MenuItem(id=5, name=name, slug="main")
+
+    async def get_page(self, page_id):
+        return ContentItem(id=page_id, title=f"Page {page_id}", status="publish")
+
+    async def create_menu_item(self, menu_id, *, page_id, title, menu_order=0):
+        item = {"menu_id": menu_id, "page_id": page_id, "title": title, "order": menu_order}
+        FakeMenuWp.created_items = (FakeMenuWp.created_items or []) + [item]
+        return MenuItemEntry(id=100 + page_id, title=title, object_id=page_id)
+
+
+async def test_assemble_menu_without_approval_is_gated(monkeypatch):
+    async def boom(site_slug):
+        raise AssertionError("credentials accessed without approval!")
+
+    monkeypatch.setattr(wp_tools, "_credentials", boom)
+
+    result = await wp_tools.wp_assemble_menu.ainvoke(
+        {"site_slug": "acme", "menu_name": "Main", "page_refs": [1, 2]}
+    )
+    assert result["status"] == "needs_approval"
+    assert result["preview"]["menu"] == "Main"
+
+
+async def test_assemble_menu_applies_when_approved(fake_creds, monkeypatch):
+    FakeMenuWp.created_items = None
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", FakeMenuWp)
+    result = await wp_tools.wp_assemble_menu.ainvoke(
+        {
+            "site_slug": "acme",
+            "menu_name": "Main",
+            "page_refs": [1, 2],
+            "approved": True,
+        }
+    )
+    assert result["status"] == "applied"
+    assert result["menu"]["id"] == 5
+    assert len(result["items"]) == 2
+    assert FakeMenuWp.created_items[0]["page_id"] == 1
+    assert FakeMenuWp.created_items[1]["order"] == 1
+
+
+async def test_assemble_menu_accepts_resolved_ref_values(fake_creds, monkeypatch):
+    # By execution time, $ref placeholders have already been resolved to real
+    # ints (graph.resolve_refs) — the tool just needs to accept int-like input.
+    FakeMenuWp.created_items = None
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", FakeMenuWp)
+    result = await run_approved(
+        "wp_assemble_menu",
+        {"site_slug": "acme", "menu_name": "Main", "page_refs": [42]},
+    )
+    assert result["status"] == "applied"
+    assert FakeMenuWp.created_items[0]["page_id"] == 42

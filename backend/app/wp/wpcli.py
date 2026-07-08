@@ -207,3 +207,12 @@ class WpCli:
         return await self._executor.run(
             ["post", "meta", "get", str(post_id), key, "--format=json"]
         )
+
+    async def export_db(self, filename: str) -> CliResult:
+        """Export the site DB to a file on the WP-CLI target, as a rollback point.
+
+        The file stays on the target's own filesystem (not downloaded) — it's a
+        restore point for a human to use via ``wp db import``, not an automated
+        rollback.
+        """
+        return await self._executor.run(["db", "export", filename])

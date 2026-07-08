@@ -57,7 +57,13 @@ async def test_resume_streams_events_then_report(stub_db, monkeypatch):
     async def fake_run_approved(tool, args):
         return {"status": "applied"}
 
+    async def fake_site_credentials(site_slug):
+        raise LookupError("no site registered in this unit test")
+
     monkeypatch.setattr(graph_mod, "run_approved", fake_run_approved)
+    # The snapshot node degrades gracefully without a DB, but mock it anyway
+    # so this stays a fast, hermetic unit test (no real connection attempt).
+    monkeypatch.setattr(graph_mod, "_site_credentials", fake_site_credentials)
 
     manager = TaskManager(build_orchestrator(MemorySaver(), planner=FakePlanner()))
     started = await manager.start(session=None, instruction="Create Home", site_slug="acme")
