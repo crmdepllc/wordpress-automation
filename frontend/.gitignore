@@ -13,6 +13,11 @@
 # testing
 /coverage
 
+# Playwright (visual regression) — transient run output; real baseline
+# snapshots under tests-visual/**/*-snapshots/ ARE tracked once they exist.
+/test-results/
+/playwright-report/
+
 # next.js
 /.next/
 /out/

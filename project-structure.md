@@ -2,7 +2,7 @@
 
 This document describes the layout of the **WordPress Automation** repository — an AI agent system that builds and manages WordPress/Elementor sites from natural-language instructions. For the intended end-state architecture and the role each technology plays, see [project-overview.md](project-overview.md).
 
-> **Current state:** Sprints 1–7 complete. The backend has a LangGraph "ping" node (Sprint 1); a typed WordPress tool layer — REST client, pluggable WP-CLI executor, encrypted credentials, approval-gated tools (Sprint 3); a real orchestration graph (`plan → approve[interrupt] → snapshot → execute → report`) with Postgres-checkpointed state, `/api/tasks` endpoints, and a Celery worker (Sprint 4); an Elementor page-generation skill (Sprint 5); content/SEO/theming/plugin skills (Sprint 6); and dependency-ordered multi-step decomposition with a pre-execution DB snapshot and halt-on-failure execution (Sprint 7) — **18 gated tools** the planner can compose. The frontend dashboard (Sprint 2) is wired off its mocks onto the real interrupt/resume flow. The whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
+> **Current state:** Sprints 1–8 complete. The backend has a LangGraph "ping" node (Sprint 1); a typed WordPress tool layer — REST client, pluggable WP-CLI executor, encrypted credentials, approval-gated tools (Sprint 3); a real orchestration graph (`plan → approve[interrupt] → snapshot → execute → report`) with Postgres-checkpointed state, `/api/tasks` endpoints, and a Celery worker (Sprint 4); an Elementor page-generation skill (Sprint 5); content/SEO/theming/plugin skills (Sprint 6); dependency-ordered multi-step decomposition with a pre-execution DB snapshot and halt-on-failure execution (Sprint 7); and a scored eval suite wired into GitHub Actions as a blocking CI gate, plus a gated live/Playwright visual-regression workflow (Sprint 8) — **18 gated tools** the planner can compose. The frontend dashboard (Sprint 2) is wired off its mocks onto the real interrupt/resume flow. The whole stack boots via Docker Compose. Items marked _(planned)_ come from the overview but are not yet implemented.
 
 ## Top-level layout
 
@@ -16,6 +16,10 @@ wordpress-automation/
 ├── docker-compose.yml     # One-command dev stack (see below)
 ├── .env.example           # Root quick-start / compose notes
 ├── .gitignore             # Ignores .env files, venvs, node_modules, build output
+├── .github/
+│   └── workflows/
+│       ├── ci.yml         # Blocking: unit tests + offline eval gate (Sprint 8)
+│       └── eval-live.yml  # Non-blocking: Docker + real Claude + Playwright (Sprint 8)
 ├── backend/               # FastAPI + LangGraph agent server (Python)
 └── frontend/              # Next.js dashboard / chat UI (TypeScript)
 ```
@@ -54,6 +58,8 @@ backend/
 ├── .env.example           # Env template (ANTHROPIC_API_KEY, CREDENTIAL_ENCRYPTION_KEY, …)
 ├── README.md              # (empty)
 ├── main.py                # Local launcher — runs uvicorn against app.main:app
+├── scripts/
+│   └── run_evals.py       # Eval suite CLI — the CI gate + report generator (Sprint 8)
 ├── alembic.ini            # Alembic config (DB URL injected from settings)
 ├── alembic/
 │   ├── env.py             # Async migration environment (uses Base metadata)
@@ -78,6 +84,7 @@ backend/
 │   ├── test_elementor_skill.py    # 5+ brief evals → valid pages (generator mocked)
 │   ├── test_elementor_tool.py     # wp_create_elementor_page gating + write path
 │   ├── test_sprint6_tools.py      # wp_publish_post/wp_apply_seo/wp_apply_theme/wp_configure_plugin
+│   ├── test_evals.py              # Eval suite as a pytest gate (Sprint 8) — same runner as scripts/run_evals.py
 │   └── integration/
 │       ├── test_live_wp.py               # @integration — live Docker WP (self-skips)
 │       ├── test_orchestrator_persistence.py # @integration — paused task survives restart
@@ -132,10 +139,23 @@ backend/
     │       ├── checkpointer.py# AsyncPostgresSaver factory (persistence)
     │       ├── manager.py     # TaskManager: start→interrupt, resume+stream
     │       └── tasks_service.py # tasks table CRUD
-    └── worker/
+    ├── worker/
+    │   ├── __init__.py
+    │   ├── celery_app.py  # Celery app (Redis broker/backend)
+    │   └── tasks.py       # execute_task — resume a paused task in a worker
+    └── evals/             # Sprint 8: scored golden dataset + CI gate
         ├── __init__.py
-        ├── celery_app.py  # Celery app (Redis broker/backend)
-        └── tasks.py       # execute_task — resume a paused task in a worker
+        ├── scoring.py      # CheckResult/ScenarioResult/Scenario/SkillReport (weighted-checklist scoring)
+        ├── thresholds.py   # Per-skill minimum score (CI regression floor)
+        ├── runner.py       # run_skill()/run_all() — executes every scenario, offline
+        ├── report.py       # Markdown (job summary) + JSON (artifact) rendering
+        └── scenarios/      # One file per skill — 23 scenarios total
+            ├── elementor.py    # 5 (relocated from the old test_elementor_skill.py)
+            ├── content.py      # 4
+            ├── seo.py          # 4
+            ├── theme.py        # 3
+            ├── plugins.py      # 3
+            └── orchestrator.py # 4 — exercises Sprint 7's planner._decompose directly
 ```
 
 - **Package manager:** [`uv`](https://github.com/astral-sh/uv) (`uv.lock`, `pyproject.toml`), Python `>=3.14`. Test deps (`pytest`, `pytest-asyncio`, `respx`) are in the `dev` dependency group.
@@ -148,9 +168,11 @@ backend/
 - **Elementor skill ([app/agent/skills/elementor/](backend/app/agent/skills/elementor/)):** brief → validated `_elementor_data`. Claude fills a constrained `PageSpec` IR (never raw JSON); a deterministic builder compiles it from the real section templates in `examples/`, regenerating ids; a validator rejects malformed structures before any write. Exposed as the gated `wp_create_elementor_page` tool, which writes via REST then auto-runs `wp elementor flush-css`. The seeded templates are **reference scaffolds** — per AGENTS.md rule #3 they should be replaced with genuine editor exports, which the gated render eval verifies.
 - **Content / SEO / theming / plugin / menu skills ([app/agent/skills/](backend/app/agent/skills/)):** **content** → a `PostDraft` written via REST with find-or-create categories/tags + optional scheduling (`wp_publish_post`); **seo** → meta title/description + JSON-LD written as Yoast/RankMath post-meta over REST (`wp_apply_seo`); **theme** → a `ThemeSpec` applied via WP-CLI theme mods + a best-effort Elementor kit merge (`wp_apply_theme`); **plugins** → search + configure via WP-CLI (`wp_search_plugins` read, `wp_configure_plugin` write) with a recommend catalog; **menu** (Sprint 7) → `wp_assemble_menu` creates a nav menu and attaches pages as menu items over REST. All writes are gated. SEO/theme meta rely on the companion plugin registering keys / the Customizer being CLI-driven — the same live-gated caveat as Elementor. **18 tools total** now.
 - **Celery worker ([app/worker/](backend/app/worker/)):** scaffolding for long-running execution — `execute_task` resumes a persisted task off the request path against the shared Postgres checkpoint. The Sprint 4 demo path runs inline (so it streams live); the worker is ready for genuinely long jobs.
+- **Eval suite ([app/evals/](backend/app/evals/), Sprint 8):** a scored golden dataset — 23 scenarios across all six skills, each scored 0–100 by a weighted checklist (`scoring.py`) and rolled up per skill (`runner.py`). `scripts/run_evals.py` is both the CI gate and the report generator: it runs the same `runner.run_all()` that `tests/test_evals.py` asserts against, writes `eval-report.{md,json}`, and exits non-zero if any skill drops below its committed floor (`thresholds.py`). One scoring engine, two callers — no duplicated logic between the pytest dev loop and the CI script.
 - **Config / secrets:** [backend/app/config.py](backend/app/config.py) reads all settings (API key, models, DB/Redis URLs, `CREDENTIAL_ENCRYPTION_KEY`, Celery URLs, optional `LANGSMITH_API_KEY`, CORS) from the environment / `.env`. Credentials are Fernet-encrypted at rest; nothing is hardcoded.
-- **Tests:** `pytest` — unit tests mock httpx (`respx`), SSH/subprocess, the LLM, and the DB, and use `MemorySaver` for the graph, so they pass without Docker. Integration tests are `@pytest.mark.integration` and self-skip when Docker/Postgres/WP is unavailable. **102 passing, 4 skipped** (one pre-existing, environment-specific `test_local_docker_executor_command` failure is unrelated to Sprint 7 — reproduces identically on `main`).
-- **Planned components** _(per overview, not yet present)_: eval suite & CI scoring (Sprint 8), pgvector recall.
+- **Tests:** `pytest` — unit tests mock httpx (`respx`), SSH/subprocess, the LLM, and the DB, and use `MemorySaver` for the graph, so they pass without Docker. Integration tests are `@pytest.mark.integration` and self-skip when Docker/Postgres/WP is unavailable. **105 passing, 4 skipped** (one pre-existing, environment-specific `test_local_docker_executor_command` failure predates Sprint 8 unchanged — reproduces identically on `main`).
+- **CI ([.github/workflows/](.github/workflows/), Sprint 8 — first CI in this repo):** `ci.yml` is the required/blocking check on every PR — `pytest -m "not integration"` then `scripts/run_evals.py`, offline and deterministic (no Docker, no API key). `eval-live.yml` is a separate, **non-blocking** `workflow_dispatch`/weekly workflow that brings up the Docker sandbox, runs the `@integration` suite against a real Claude key, and runs the Playwright visual-regression suite below.
+- **Planned components** _(per overview, not yet present)_: pgvector recall; a real live baseline for the Playwright suite (needs the companion WP plugin, see below); a persisted eval-history dashboard (explicitly deferred — Sprint 8 shipped a generated CI report instead).
 
 ## Frontend (`frontend/`)
 
@@ -165,12 +187,15 @@ frontend/
 ├── postcss.config.mjs     # PostCSS — loads @tailwindcss/postcss
 ├── eslint.config.mjs      # Flat ESLint config (next core-web-vitals + TS)
 ├── components.json        # shadcn/ui config
+├── playwright.config.ts   # Visual-regression config (Sprint 8) — targets WP_BASE_URL, not the Next app
 ├── Dockerfile             # Frontend image (Next.js dev server)
 ├── .dockerignore          # Excludes node_modules, .next, .env from the image
 ├── .env.example           # Env template (NEXT_PUBLIC_API_BASE)
 ├── next-env.d.ts          # Next.js generated types (not tracked)
 ├── README.md              # Default create-next-app readme
 ├── public/                # Static assets (next.svg, vercel.svg, file.svg, globe.svg, window.svg)
+├── tests-visual/          # Playwright visual regression (Sprint 8), separate from the Next app's own tests
+│   └── elementor-page.spec.ts # Screenshots an agent-generated Elementor page, diffs vs. a committed baseline
 └── src/
     ├── app/               # Next.js App Router
     │   ├── layout.tsx     # Root layout — fonts, global CSS, <Providers>
@@ -212,10 +237,11 @@ frontend/
 - **State / data:** Zustand `^5` drives live task state ([store/task-store.ts](frontend/src/store/task-store.ts)); TanStack Query `^5` fetches the project list ([lib/use-projects.ts](frontend/src/lib/use-projects.ts)) via the [Providers](frontend/src/components/providers.tsx) wrapper.
 - **AI streaming:** Vercel AI SDK — `ai` `^6` + `@ai-sdk/react` `^3` (`useChat`). As of Sprint 4 the chat/approval routes are **real**: `/api/chat` starts a LangGraph task on FastAPI and streams its plan back as a `data-plan` part (carrying the task id); `/api/tasks/[id]/resume` proxies approve/reject and pipes the execution stream. Only `/api/projects` remains mock.
 - **Backend URLs:** browser-facing `NEXT_PUBLIC_API_BASE` (ping spike) and server-side `BACKEND_URL` (the proxy target, `http://backend:8000` in Docker) — see [lib/backend.ts](frontend/src/lib/backend.ts). `NEXT_PUBLIC_DEFAULT_SITE` selects the WP site slug.
-- **Scripts:** `dev`, `build`, `start` (Next.js) and `lint` (ESLint).
+- **Scripts:** `dev`, `build`, `start` (Next.js), `lint` (ESLint), `test:visual` (Playwright visual regression, Sprint 8).
 - **Path alias:** `@/*` resolves to `frontend/src/*`.
-- **Styling rule:** colors come from design tokens only (the CSS variables in `globals.css` / token classes like `bg-background`, `text-muted-foreground`) — no hardcoded hex or raw Tailwind color classes.
-- **Planned components** _(per overview, not yet present)_: a real site selector (replacing the single default slug), live page preview panel.
+- **Styling rule:** colors come from design tokens only (the CSS variables in `globals.css` / token classes like `bg-background`, `text-muted-foreground`) — no hardcoded hex or raw Tailwind color classes. (`tests-visual/` screenshots agent-generated *WordPress* pages, not this app, so it isn't subject to this rule.)
+- **Visual regression ([tests-visual/](frontend/tests-visual/), Sprint 8):** `@playwright/test` navigates to a live agent-generated Elementor page (`WP_BASE_URL`, `WP_ELEMENTOR_PAGE_SLUG`) and diffs a full-page screenshot against a committed baseline via `toHaveScreenshot()`. Runs only in `.github/workflows/eval-live.yml` (non-blocking) — there is no committed baseline yet, since it needs the live WP sandbox plus the companion plugin's `_elementor_data` REST registration (see the Elementor skill caveat below) to render anything meaningful.
+- **Planned components** _(per overview, not yet present)_: a real site selector (replacing the single default slug), live page preview panel; a real Playwright baseline once the companion WP plugin ships.
 
 ## Documentation & agent files
 
@@ -228,7 +254,7 @@ frontend/
 
 ## Notable observations
 
-- **Sprints 1–7 complete:** Sprint 1 — the end-to-end path (frontend → FastAPI → LangGraph → Claude → back). Sprint 2 — the dashboard shell. Sprint 3 — a typed WP tool layer with encrypted credentials and code-level approval gating. Sprint 4 — a real orchestration graph whose `interrupt()` pauses for approval and resumes from the dashboard, with Postgres-persisted state. Sprint 5 — the Elementor generation skill: Claude fills a constrained IR, a deterministic builder produces the fragile `_elementor_data` from real templates, a validator gates every write. Sprint 6 — content/SEO/theming/plugin skills round out what the agent can do to a site. Sprint 7 — the orchestrator decomposes a brief into a category-ordered dependency graph, takes a pre-execution DB snapshot, resolves cross-step `$ref`s, and halts cleanly on the first failure instead of continuing silently.
+- **Sprints 1–8 complete:** Sprint 1 — the end-to-end path (frontend → FastAPI → LangGraph → Claude → back). Sprint 2 — the dashboard shell. Sprint 3 — a typed WP tool layer with encrypted credentials and code-level approval gating. Sprint 4 — a real orchestration graph whose `interrupt()` pauses for approval and resumes from the dashboard, with Postgres-persisted state. Sprint 5 — the Elementor generation skill: Claude fills a constrained IR, a deterministic builder produces the fragile `_elementor_data` from real templates, a validator gates every write. Sprint 6 — content/SEO/theming/plugin skills round out what the agent can do to a site. Sprint 7 — the orchestrator decomposes a brief into a category-ordered dependency graph, takes a pre-execution DB snapshot, resolves cross-step `$ref`s, and halts cleanly on the first failure instead of continuing silently. Sprint 8 — a 23-scenario scored golden dataset gates every PR in this repo's first CI workflow, with a separate non-blocking workflow for the live Docker+real-Claude+Playwright run.
 - **One real approval gate now:** the graph pauses at `interrupt(plan)` and only `Command(resume="approve")` reaches the snapshot/execute nodes, and `execute` is the sole caller of `run_approved` (the sole granter of `approved=True`). The Sprint 2 UI mock and the standalone `approved` flag are superseded by this single path. pgvector recall remains target architecture in [project-overview.md](project-overview.md).
 - **Version drift:** The overview describes "Next.js 14," but `package.json` pins `16.2.9`. Follow the installed version and its bundled docs.
 - **Deps reconciled:** All backend dependencies (including `langgraph` and `anthropic`) now live in `pyproject.toml` / `uv.lock`; there is no separate `requirements.txt`.

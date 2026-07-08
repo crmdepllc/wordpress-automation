@@ -1,0 +1,52 @@
+name: CI
+
+# Blocking gate: the deterministic, mocked-LLM test + eval suite. No Docker,
+# no live API key — runs on every PR touching a skill and must pass to merge.
+# The live Docker + real-Claude + Playwright run lives in eval-live.yml and is
+# NOT a required check (see that workflow for why).
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/**"
+      - "backend/tests/**"
+      - "backend/scripts/**"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - ".github/workflows/ci.yml"
+  push:
+    branches: [main]
+
+jobs:
+  test-and-eval:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run unit tests (mocked LLM/DB/WP-CLI, no Docker)
+        run: uv run pytest -m "not integration"
+
+      - name: Run the eval suite (offline, scored regression gate)
+        run: uv run python scripts/run_evals.py --out-dir eval-out
+
+      - name: Publish eval report to the job summary
+        if: always()
+        run: cat eval-out/eval-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload eval report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: backend/eval-out/

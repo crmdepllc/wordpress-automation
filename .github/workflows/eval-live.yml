@@ -1,0 +1,77 @@
+name: Live eval (Docker + real Claude + visual regression)
+
+# NOT a required check — this needs Docker, a paid ANTHROPIC_API_KEY secret,
+# and (per the documented Sprint 5/6 caveat) the not-yet-built companion WP
+# plugin to register `_elementor_data`/provider meta with `show_in_rest`,
+# without which Elementor content won't render at all. Triggered manually or
+# weekly so the live/visual surface is still watched without blocking every PR.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Monday 06:00 UTC
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write backend .env
+        run: |
+          cat > backend/.env <<EOF
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          CREDENTIAL_ENCRYPTION_KEY=${{ secrets.CREDENTIAL_ENCRYPTION_KEY }}
+          EOF
+
+      - name: Start the Docker sandbox
+        run: docker compose up -d --build postgres redis wp-db wordpress wp-init wpcli backend
+
+      - name: Wait for the backend to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && exit 0
+            sleep 5
+          done
+          echo "backend did not become healthy in time" >&2
+          docker compose logs
+          exit 1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Run gated integration tests (live WP + real Claude)
+        working-directory: backend
+        run: uv run pytest -m integration
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run visual regression suite
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          WP_BASE_URL: http://localhost:8080
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

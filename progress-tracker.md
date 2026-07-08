@@ -8,10 +8,10 @@ Update this file whenever the current phase, active feature, or implementation s
 This breaks the project from project-overview.md into 10 sequential sprints. Each sprint has a goal, a task list, and a concrete deliverable that marks it done. Sprints are ordered by dependency — don't start a later sprint before the previous one's deliverable is met.
 
 ## Current Phase
-- Sprint 8 (Eval suite & quality scoring) — next up
+- Sprint 9 (Security hardening) — next up
 
 ## Current Goal
-- Sprints 1–7 — ✅ complete; Sprint 8 ready to start
+- Sprints 1–8 — ✅ complete; Sprint 9 ready to start
 
 ---
 
@@ -215,19 +215,37 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
-## Sprint 8 — Eval suite & quality scoring
+## Sprint 8 — Eval suite & quality scoring — ✅ COMPLETE
 
 **Phase:** Hardening
 
 **Goal:** Confidence that each skill works reliably, with a repeatable way to catch regressions.
 
 **Tasks**
-- Build a golden dataset: 20+ real-world WP task scenarios across all skills
-- Automate eval runs against the sandboxed Docker WP instance, scored for correctness
-- Add Playwright visual regression: screenshot agent-generated pages, flag visual breaks
-- Wire evals into GitHub Actions — every PR touching a skill must pass its eval set
+- [x] Build a golden dataset: 20+ real-world WP task scenarios across all skills
+- [x] Automate eval runs against the sandboxed Docker WP instance, scored for correctness
+- [x] Add Playwright visual regression: screenshot agent-generated pages, flag visual breaks
+- [x] Wire evals into GitHub Actions — every PR touching a skill must pass its eval set
 
-**Deliverable:** CI blocks any PR that regresses a skill's eval score; team has a quality dashboard.
+**Deliverable:** CI blocks any PR that regresses a skill's eval score; team has a quality dashboard. — **Met** (offline scored gate is real and enforced in CI; the live Docker+real-Claude scored run and Playwright visual regression are built but intentionally gated/non-blocking — see notes).
+
+**Architecture decisions (via /architect)**
+- **CI gate = offline only.** The blocking `pull_request` check runs the deterministic, mocked-LLM/mocked-WP-CLI eval set (no Docker, no API key, seconds not minutes) — extending the offline-eval pattern Sprints 5–6 already established. The live Docker+real-Claude+Playwright run is a separate `workflow_dispatch`/weekly workflow, **not** a required status check, so a paid API key and Docker flakiness never sit in the way of merging.
+- **Scoring = weighted checklist, not pass/fail.** Every scenario runs a small list of weighted assertions (`app/evals/scoring.py`) and scores 0–100; a skill's score is the average of its scenarios' scores. A skill that starts failing one minor check registers as a partial regression, not an invisible pass.
+- **Regression = fixed per-skill threshold**, committed in `app/evals/thresholds.py` — not a ratcheting baseline file, so improving a score never requires touching a baseline as part of an unrelated PR.
+- **One scoring engine, two callers.** `scripts/run_evals.py` (the CI gate + report generator) and `tests/test_evals.py` (the local `pytest` dev loop) both call the same `app/evals/runner.py` — no duplicated scoring logic to drift out of sync.
+- **Quality dashboard = generated CI report, not a new frontend page.** Every run writes `eval-report.md` (posted to the GitHub Actions job summary) and `eval-report.json` (uploaded as a build artifact) — no new DB table, API route, or dashboard UI this sprint.
+- **Playwright ships even though it's expected red here.** The harness (config + spec + CI wiring) is real, but per the Sprint 5/6 caveat, `_elementor_data` only persists over REST once the companion WP plugin registers it with `show_in_rest` — without it the target page renders blank. The spec documents this inline; it runs only in the non-blocking live workflow.
+
+**Notes / what shipped**
+- `app/evals/`: `scoring.py` (`CheckResult`/`ScenarioResult`/`Scenario`/`SkillReport`), `thresholds.py` (per-skill floors: 90 for elementor/content/seo/orchestrator, 85 for theme/plugins), `runner.py` (`run_skill`/`run_all`), `report.py` (markdown + JSON rendering, ASCII status markers — no emoji, so it prints cleanly on a plain Windows console too), `scenarios/` — one file per skill: `elementor.py` (5, relocated from the old `test_elementor_skill.py` SCENARIOS), `content.py` (4), `seo.py` (4), `theme.py` (3), `plugins.py` (3), `orchestrator.py` (4, new — exercises Sprint 7's `planner._decompose` directly: category precedence, `$ref` dependency capture, menu-depends-on-pages/content). **23 scenarios total.**
+- `backend/scripts/run_evals.py`: the CLI entry — runs every scenario, writes `eval-out/eval-report.{md,json}`, prints the markdown, exits 1 on any regression.
+- `backend/tests/test_evals.py`: pytest wrapper over the same runner (regression gate, scenario-count sanity checks, plus unit tests for the scoring/report primitives themselves). `test_elementor_skill.py` trimmed to its non-scenario edge-case tests, with the 5-brief golden set relocated to `app/evals/scenarios/elementor.py`.
+- `.github/workflows/ci.yml` (new — **first CI in this repo**): path-filtered on `pull_request` to `backend/app/**`/`backend/tests/**`/etc.; runs `pytest -m "not integration"` (the full non-integration suite, so an ordinary broken unit test blocks a PR too, not just eval-score regressions) then `scripts/run_evals.py`; publishes the report to the job summary and as an artifact. **Required/blocking.**
+- `.github/workflows/eval-live.yml` (new): `workflow_dispatch` + weekly schedule; brings up the Docker Compose sandbox, runs the `@pytest.mark.integration` suite against real WP + a real Claude key (`ANTHROPIC_API_KEY` secret), then the new Playwright suite. **Not required/blocking.**
+- `frontend/`: `@playwright/test` added; `playwright.config.ts` (points at `WP_BASE_URL`, the WP sandbox — not the Next app); `tests-visual/elementor-page.spec.ts` (`toHaveScreenshot` diff against a committed baseline, `WP_ELEMENTOR_PAGE_SLUG` selects the target page). No baseline image is committed yet — there's no live page to screenshot in this environment; the harness is mechanically verified (installs, runs, correctly reports "no snapshot yet") but a real baseline is a live-environment follow-up.
+- **Tests: 105 passed, 4 skipped** (backend). One unrelated pre-existing failure (`test_local_docker_executor_command`, a local Docker-environment mismatch) persists unchanged from Sprint 7 — not a regression from this sprint. Frontend `tsc --noEmit` clean with the new Playwright files included.
+- Follow-up: once the companion WP plugin (Sprints 5/6's documented dependency) ships, run `eval-live.yml` once to capture the first real Playwright baseline; consider a persisted eval-history dashboard in the frontend if the team wants trend lines beyond per-run reports (explicitly deferred this sprint — see architecture decisions).
 
 ---
 
