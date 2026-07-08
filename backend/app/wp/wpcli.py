@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import subprocess
 from typing import Protocol
 
 from app.config import get_settings
@@ -73,6 +74,15 @@ class LocalDockerExecutor:
         self._creds = creds
         self._container = container or get_settings().wp_local_container
 
+    def _run_sync(self, full: list[str]) -> CliResult:
+        result = subprocess.run(full, capture_output=True, text=True)
+        return CliResult(
+            command=" ".join(full),
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+
     async def run(self, args: list[str]) -> CliResult:
         # --allow-root because the sandbox cli container runs as root.
         full = [
@@ -83,18 +93,12 @@ class LocalDockerExecutor:
             *args,
             "--allow-root",
         ]
-        proc = await asyncio.create_subprocess_exec(
-            *full,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        out, err = await proc.communicate()
-        return CliResult(
-            command=" ".join(full),
-            exit_code=proc.returncode if proc.returncode is not None else -1,
-            stdout=out.decode(errors="replace"),
-            stderr=err.decode(errors="replace"),
-        )
+        # Plain subprocess.run in a thread, not asyncio.create_subprocess_exec:
+        # on Windows, subprocess creation needs the Proactor event loop, but
+        # uvicorn's --reload workers (spawned via multiprocessing) start on a
+        # fresh Selector loop that raises a bare NotImplementedError. Matches
+        # SshExecutor's existing to_thread pattern above.
+        return await asyncio.to_thread(self._run_sync, full)
 
 
 def build_executor(creds: SiteCredentials) -> WpCliExecutor:
