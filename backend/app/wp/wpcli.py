@@ -1,11 +1,13 @@
 """WP-CLI execution with a pluggable transport.
 
 Per the integration rules, plugin installs/activation and Elementor CSS flush
-go through WP-CLI (never the REST API or direct DB). Two transports share one
-interface:
+go through WP-CLI (never the REST API or direct DB). Three transports share
+one interface:
 
-  - ``SshExecutor``        — real remote client sites, via Fabric/Paramiko.
-  - ``LocalDockerExecutor`` — the local Docker sandbox, via ``docker exec``.
+  - ``SshExecutor``         — real remote client sites, via Fabric/Paramiko.
+  - ``LocalDockerExecutor``  — the local Docker sandbox, via ``docker exec``.
+  - ``LocalProcessExecutor`` — a locally-installed dev site (e.g. Local by WP
+    Engine), via a plain subprocess in the site's own directory/environment.
 
 The transport is chosen per-site from ``SiteCredentials.wpcli_transport``.
 """
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import subprocess
 from typing import Protocol
 
@@ -101,10 +104,47 @@ class LocalDockerExecutor:
         return await asyncio.to_thread(self._run_sync, full)
 
 
+class LocalProcessExecutor:
+    """Runs WP-CLI as a plain local subprocess (e.g. a Local by WP Engine site).
+
+    Unlike ``LocalDockerExecutor`` (our own sandbox container), this targets a
+    WordPress install living directly on this machine, with its own bundled
+    PHP/WP-CLI and environment (``creds.cli_cwd`` / ``creds.cli_env``).
+    """
+
+    def __init__(self, creds: SiteCredentials):
+        if not creds.cli_cwd:
+            raise ValueError("local_process transport requires cli_cwd.")
+        self._creds = creds
+
+    def _run_sync(self, args: list[str]) -> CliResult:
+        env = dict(os.environ)
+        for key, value in (self._creds.cli_env or {}).items():
+            if key == "PATH":
+                env["PATH"] = value + os.pathsep + env.get("PATH", "")
+            else:
+                env[key] = value
+        full = [self._creds.wp_cli_path, *args]
+        result = subprocess.run(
+            full, cwd=self._creds.cli_cwd, env=env, capture_output=True, text=True
+        )
+        return CliResult(
+            command=" ".join(full),
+            exit_code=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+
+    async def run(self, args: list[str]) -> CliResult:
+        return await asyncio.to_thread(self._run_sync, args)
+
+
 def build_executor(creds: SiteCredentials) -> WpCliExecutor:
     """Pick the transport for a site from its credentials."""
     if creds.wpcli_transport == "local_docker":
         return LocalDockerExecutor(creds)
+    if creds.wpcli_transport == "local_process":
+        return LocalProcessExecutor(creds)
     return SshExecutor(creds)
 
 

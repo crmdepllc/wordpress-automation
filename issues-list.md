@@ -126,3 +126,51 @@ raised from `get_site_credentials()` in `app/wp/credentials.py` — expected, si
 **Verified:** `POST /api/wp/execute` with `wp_create_elementor_page` against `site_slug: "sandbox"` now returns `{"status": "applied", "page": {...}, "sections": [...], "css_flushed": true}` end-to-end through the real API (no direct script bypass).
 
 **Status:** Resolved. Note for anyone spinning up the sandbox fresh: an Application Password still must be generated and registered manually per site (Sprint 3's known caveat) — this isn't automated by `wp-init`.
+
+---
+
+## Issue 5 — Dashboard chat shows "I couldn't plan that: fetch failed"
+
+**Sprint:** Sprint 2/4 — Dashboard chat UI + orchestration graph (the Next.js ↔ FastAPI bridge)
+
+**Symptom:** Submitting a request in the dashboard's chat panel returned the assistant message `I couldn't plan that: fetch failed` instead of a plan.
+
+**Root cause:** `"fetch failed"` is literally `err.message` from the `catch` block in `frontend/src/app/api/chat/route.ts:76-77` — it's what Node's `fetch()` throws when the underlying TCP connection can't be established at all (as opposed to a normal non-2xx HTTP response, which is handled separately and would have shown the backend's actual error detail instead). That message only ever appears when `fetch(\`${BACKEND_URL}/api/tasks\`)` couldn't reach *anything* listening on `http://localhost:8000`.
+
+Confirmed the underlying cause was environmental, not a code bug: **Docker Desktop was not running** (again — same recurring issue as Issues 1/3/4, most likely after a machine restart, since Docker Desktop doesn't auto-start previously-running containers). With the daemon down, `postgres`, `redis`, `wp-db`, `wordpress`, and `wpcli` were all stopped. At the moment the user hit "send," nothing was listening on port 8000 at all (the backend dev process itself was either not running yet or had gone down), producing the connection-refused-style `fetch failed`. By the time this was investigated, a backend process happened to be listening again (`/health` returned 200), but `/api/wp/sites` still 500'd with a bare "Internal Server Error" because Postgres was unreachable — confirming the containers, not the backend process, were the actual gap.
+
+**Solution:**
+1. Started Docker Desktop again and waited for its daemon to become reachable.
+2. `docker compose up -d postgres redis wp-db wordpress wpcli` (all services needed for the sandbox end-to-end flow; `wp-init` intentionally excluded since WordPress/Elementor were already installed in Issue 4 — re-running it is a documented no-op anyway).
+3. Verified the previously-registered `sandbox` site and the WP sandbox's permalink/`WP_ENVIRONMENT_TYPE` fixes both survived, since they live in Docker volumes (`postgres_data`, `wp_data`) that persist across container stop/start — no re-registration or re-fixing needed.
+4. Verified the actual dashboard code path end-to-end (not a bypass): `POST http://localhost:3000/api/chat` with a real chat message now streams back `"I've planned 1 step(s)..."` plus the real `data-plan` payload from the live backend/graph — no "fetch failed."
+
+**Follow-up worth considering (not implemented):** this is the fourth issue in this log caused by Docker Desktop/containers not running after a restart. If this keeps recurring, consider either (a) configuring Docker Desktop's "Start containers on boot" restart policy for this project's compose stack, or (b) having the frontend's `/api/chat` route catch a connection-refused specifically and surface a clearer message than the generic "fetch failed" (e.g. "Backend unreachable — is the FastAPI server and Docker stack running?").
+
+**Status:** Resolved for this session (Docker Desktop + full container stack back up, verified through the real dashboard proxy). The underlying "containers don't survive a machine/Docker restart" pattern is environmental and will recur — see follow-up above.
+
+---
+
+## Issue 6 — Switch the dev site from the Docker sandbox to a real local WordPress install (`digi.local`, via Local by WP Engine)
+
+**Sprint:** Sprint 3 — WP REST/WP-CLI wrappers (extends the WP-CLI transport abstraction with a third transport)
+
+**Context:** The user has a separate, non-Docker WordPress install managed by "Local by WP Engine" — site `digi` at `http://digi.local`, PHP 8.2.29, MySQL 8.4.0 via nginx — and asked to make it the primary dev site instead of the Docker `sandbox` site from Issue 4.
+
+**Problem found before registering:** the only two `WpCliTransport` options were `ssh` (real remote hosts via Fabric/Paramiko) and `local_docker` (`docker exec` into *this project's own* `wpcli` sandbox container). Neither fits `digi.local` — it's not reachable over SSH, and registering it with `local_docker` would have silently pointed every WP-CLI action (plugin installs, and critically the mandatory `elementor flush-css` after every Elementor write) at the **wrong WordPress install** — our Docker sandbox's database, not digi's. Caught this before it caused a wrong-site write and flagged it to the user rather than registering it misconfigured.
+
+**Solution — added a third WP-CLI transport, `local_process`:**
+1. `app/db/models.py` — added `local_process` to the `WpCliTransport` enum; added two new `WpSite` columns: `cli_cwd` (the site's working directory to run WP-CLI from) and `cli_env` (JSON-encoded extra environment variables it needs — e.g. a bundled PHP's `PHPRC`, a `PATH` prefix for its binaries). Not treated as secret (paths/config, no credentials), so stored as plain `Text`, unlike the encrypted SSH fields.
+2. `alembic/versions/0003_add_local_process_transport.py` (new file; `project-structure.md` updated in the same change per AGENTS.md rule) — `ALTER TYPE wpcli_transport ADD VALUE 'local_process'` + the two new columns.
+3. `app/wp/schemas.py` (`SiteCredentials`), `app/wp/credentials.py` (`_to_credentials`/`upsert_site`, JSON encode/decode for `cli_env`), and `app/api/wp_routes.py` (`SiteIn`) — threaded the two new fields through.
+4. `app/wp/wpcli.py` — added `LocalProcessExecutor`: runs WP-CLI as a plain `subprocess.run()` (via `asyncio.to_thread`, matching the existing `SshExecutor`/`LocalDockerExecutor` pattern from Issue 4) in `cli_cwd`, with `cli_env` merged into the inherited environment (`PATH` is prefixed, not replaced, so the rest of the system `PATH` still resolves). Updated `build_executor()` to dispatch on the new transport.
+
+**Setting up `digi.local` itself:**
+- Found its WP-CLI binaries/env by reading Local's auto-generated `app/.envrc` (`~/Local Sites/digi/app/.envrc`): bundled PHP at `AppData/Roaming/Local/lightning-services/php-8.2.29+0/...`, WP-CLI at `Program Files (x86)/Local/resources/extraResources/bin/wp-cli/win32/wp.bat`, plus `PHPRC`/`MYSQL_HOME`/`WP_CLI_CONFIG_PATH`.
+- Confirmed `digi.local`'s `wp-config.php` already defines `WP_ENVIRONMENT_TYPE = 'local'` (Local sets this itself), so — unlike Issue 4's Docker sandbox — Application Passwords and pretty permalinks already worked out of the box; no fixes needed there.
+- Generated an Application Password via WP-CLI (`wp user application-password create digi agent --porcelain`) rather than the WP Admin UI, and registered `digi` with `wpcli_transport=local_process`, `wp_cli_path` set to the full `wp.bat` path, `cli_cwd` set to the site's `app/public` dir, and `cli_env` carrying `PHPRC`/`MYSQL_HOME`/`WP_CLI_CONFIG_PATH`/`PATH`.
+- `frontend/.env.local` — `NEXT_PUBLIC_DEFAULT_SITE` changed from `sandbox` to `digi` (requires a frontend dev-server restart to take effect, since Next.js reads it at build/import time).
+
+**Verified:** `POST /api/wp/execute` with `wp_create_elementor_page` against `site_slug: "digi"` returned `{"status": "applied", "page": {...}, "css_flushed": true}` — confirming both the REST write and the new `local_process` WP-CLI flush-css step work end-to-end against the real local WordPress install.
+
+**Status:** Resolved. The Docker `sandbox` site registration was left in place (harmless, not deleted) — `digi` is now the default via the frontend env var. Note: this makes onboarding this specific machine's Local-by-WP-Engine paths brittle (`cli_cwd`/`cli_env` are absolute paths tied to this user's install) — if this site is used from another machine or Local reinstalls to a different path, `cli_env`/`wp_cli_path`/`cli_cwd` will need updating via a re-`POST /api/wp/sites` call.

@@ -22,6 +22,7 @@ class WpCliTransport(str, enum.Enum):
 
     ssh = "ssh"  # real remote site (Fabric/Paramiko)
     local_docker = "local_docker"  # local sandbox (docker exec)
+    local_process = "local_process"  # locally-installed dev site (e.g. Local by WP Engine)
 
 
 class WpSite(Base):
@@ -47,6 +48,13 @@ class WpSite(Base):
     ssh_private_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     # WP-CLI path on the remote host / container (e.g. "wp" or an absolute path).
     wp_cli_path: Mapped[str] = mapped_column(String(255), default="wp")
+
+    # local_process transport only: working directory to run WP-CLI from (the
+    # site's public/ dir) and extra environment variables it needs (e.g. a
+    # bundled PHP's PHPRC, a PATH prefix for its binaries). JSON-encoded dict;
+    # not secret (paths/config, no credentials), so stored as plain text.
+    cli_cwd: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    cli_env: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

@@ -7,6 +7,8 @@ rest by the ``EncryptedString`` column type, so this service deals in plaintext
 
 from __future__ import annotations
 
+import json
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +32,8 @@ def _to_credentials(site: WpSite) -> SiteCredentials:
         ssh_user=site.ssh_user,
         ssh_private_key=site.ssh_private_key,
         wp_cli_path=site.wp_cli_path,
+        cli_cwd=site.cli_cwd,
+        cli_env=json.loads(site.cli_env) if site.cli_env else None,
     )
 
 
@@ -59,6 +63,8 @@ async def upsert_site(
     ssh_user: str | None = None,
     ssh_private_key: str | None = None,
     wp_cli_path: str = "wp",
+    cli_cwd: str | None = None,
+    cli_env: dict[str, str] | None = None,
 ) -> WpSite:
     """Create a site or update it in place if the slug already exists."""
     site = await session.scalar(select(WpSite).where(WpSite.slug == slug))
@@ -76,6 +82,8 @@ async def upsert_site(
     site.ssh_user = ssh_user
     site.ssh_private_key = ssh_private_key
     site.wp_cli_path = wp_cli_path
+    site.cli_cwd = cli_cwd
+    site.cli_env = json.dumps(cli_env) if cli_env else None
 
     await session.commit()
     await session.refresh(site)

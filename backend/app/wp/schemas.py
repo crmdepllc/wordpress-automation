@@ -23,12 +23,15 @@ class SiteCredentials(BaseModel):
     base_url: str
     wp_username: str
     wp_app_password: str
-    wpcli_transport: Literal["ssh", "local_docker"] = "ssh"
+    wpcli_transport: Literal["ssh", "local_docker", "local_process"] = "ssh"
     ssh_host: str | None = None
     ssh_port: int = 22
     ssh_user: str | None = None
     ssh_private_key: str | None = None
     wp_cli_path: str = "wp"
+    # local_process transport only.
+    cli_cwd: str | None = None
+    cli_env: dict[str, str] | None = None
 
 
 # --- REST entities -------------------------------------------------------

@@ -34,6 +34,8 @@ class SiteIn(BaseModel):
     ssh_user: str | None = None
     ssh_private_key: str | None = None
     wp_cli_path: str = "wp"
+    cli_cwd: str | None = None
+    cli_env: dict[str, str] | None = None
 
 
 @router.post("/sites")

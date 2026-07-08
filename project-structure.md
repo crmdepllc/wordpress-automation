@@ -60,7 +60,8 @@ backend/
 │   ├── script.py.mako     # Migration template
 │   └── versions/
 │       ├── 0001_create_wp_sites.py   # Schema: wp_sites
-│       └── 0002_create_tasks.py      # Schema: tasks (orchestration metadata)
+│       ├── 0002_create_tasks.py      # Schema: tasks (orchestration metadata)
+│       └── 0003_add_local_process_transport.py  # Adds local_process wpcli transport + wp_sites.cli_cwd/cli_env
 ├── tests/                 # pytest suite (unit + gated integration)
 │   ├── conftest.py        # Sets a throwaway encryption key before app import
 │   ├── test_crypto.py     # Fernet encrypt/decrypt
