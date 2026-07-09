@@ -6,6 +6,7 @@ Relocated from the Sprint 5 offline eval (formerly
 
 from __future__ import annotations
 
+from app.agent.skills.elementor.icons import ALLOWED_ICONS
 from app.agent.skills.elementor.schema import PageSpec, SectionSpec
 from app.agent.skills.elementor.skill import generate_elementor_page
 from app.agent.skills.elementor.validator import validate_elementor_data
@@ -59,11 +60,27 @@ _BRIEFS: dict[str, PageSpec] = {
         title="Trailmark",
         sections=[
             SectionSpec(type="hero", content={"heading": "Never lose the trail", "subheading": "Offline hiking maps", "cta_text": "Download"}),
-            SectionSpec(type="features", items=[{"title": "Offline", "text": "Works with no signal"}, {"title": "Live GPS", "text": "Track your route"}, {"title": "Share", "text": "Send routes to friends"}]),
+            SectionSpec(type="features", items=[{"title": "Offline", "text": "Works with no signal", "icon": "fas fa-mountain-sun"}, {"title": "Live GPS", "text": "Track your route", "icon": "fas fa-compass"}, {"title": "Share", "text": "Send routes to friends", "icon": "fas fa-route"}]),
             SectionSpec(type="pricing", items=[{"plan_name": "Free", "price": "$0", "cta_text": "Get"}, {"plan_name": "Pro", "price": "$5", "cta_text": "Upgrade"}]),
         ],
     ),
 }
+
+
+def _icon_values(elementor_data) -> list[str]:
+    found = []
+
+    def walk(el):
+        settings = el.get("settings", {}) if isinstance(el, dict) else {}
+        icon = settings.get("selected_icon", {}).get("value") if settings else None
+        if icon:
+            found.append(icon)
+        for child in (el.get("elements", []) if isinstance(el, dict) else []):
+            walk(child)
+
+    for el in elementor_data:
+        walk(el)
+    return found
 
 
 async def _run(brief: str, spec: PageSpec) -> list[CheckResult]:
@@ -72,11 +89,16 @@ async def _run(brief: str, spec: PageSpec) -> list[CheckResult]:
     section_count_ok = 3 <= len(result["sections"]) <= 6
     sections_match = result["sections"] == [s.type for s in spec.sections]
     title_ok = result["title"] == spec.title
+    icons = _icon_values(result["elementor_data"])
+    # Every icon must be one Elementor's bundled Font Awesome set actually has
+    # — an out-of-range value produces PHP warnings and a broken icon live.
+    icons_safe = all(icon.split()[-1].removeprefix("fa-") in ALLOWED_ICONS for icon in icons)
     return [
         CheckResult("valid_elementor_data", not errors, weight=2, detail="; ".join(errors)),
         CheckResult("section_count_3_to_6", section_count_ok, weight=1),
         CheckResult("requested_sections_present", sections_match, weight=1),
         CheckResult("title_matches", title_ok, weight=1),
+        CheckResult("icons_are_safe", icons_safe, weight=2, detail=str(icons)),
     ]
 
 

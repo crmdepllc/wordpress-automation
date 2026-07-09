@@ -174,3 +174,30 @@ Confirmed the underlying cause was environmental, not a code bug: **Docker Deskt
 **Verified:** `POST /api/wp/execute` with `wp_create_elementor_page` against `site_slug: "digi"` returned `{"status": "applied", "page": {...}, "css_flushed": true}` — confirming both the REST write and the new `local_process` WP-CLI flush-css step work end-to-end against the real local WordPress install.
 
 **Status:** Resolved. The Docker `sandbox` site registration was left in place (harmless, not deleted) — `digi` is now the default via the frontend env var. Note: this makes onboarding this specific machine's Local-by-WP-Engine paths brittle (`cli_cwd`/`cli_env` are absolute paths tied to this user's install) — if this site is used from another machine or Local reinstalls to a different path, `cli_env`/`wp_cli_path`/`cli_cwd` will need updating via a re-`POST /api/wp/sites` call.
+
+---
+
+## Issue 7 — PHP warnings on generated pages: `Undefined array key "mountain-sun"` in Elementor's `font-awesome.php`
+
+**Sprint:** Post-Sprint-8 fix pass (Elementor richness work — the `features` section's new `icon-box` widget)
+
+**Symptom:** User-reported, seen on a real generated page on `digi.local`:
+```
+Warning: Undefined array key "mountain-sun" in .../elementor/core/page-assets/data-managers/font-icon-svg/font-awesome.php on line 45
+Warning: Trying to access array offset on value of type null in .../font-awesome.php on line 48
+Warning: Trying to access array offset on value of type null in .../font-awesome.php on line 49
+Warning: Trying to access array offset on value of type null in .../font-awesome.php on line 50
+```
+
+**Root cause:** Read `digi.local`'s actual installed `font-awesome.php` directly (`C:\Users\Web Dept\Local Sites\digi\app\public\wp-content\plugins\elementor\...`) rather than guessing. Elementor's SVG icon renderer doesn't use whatever Font Awesome version is documented publicly — it looks icons up by name in a *bundled* dataset, `elementor/assets/lib/font-awesome/json/solid.json`, pinned to **Font Awesome 5.15.3** (`Font_Awesome::LIBRARY_CURRENT_VERSION`), confirmed by reading that file too. `"mountain-sun"` is a real Font Awesome icon — but it was added in FA **6.2**, so it doesn't exist in the bundled 5.15.3 dataset `$file_data['icons']['mountain-sun']` looks up, producing `null`, hence the warnings. The generator's system prompt (added in the same richness pass that introduced icon slots) told the model to "pick a Font Awesome 6 free solid class" without any awareness that Elementor's actual icon renderer is stuck on FA5.
+
+**Solution:**
+1. Extracted the real, complete list of valid icon keys from `digi.local`'s own `solid.json` (1002 icons) and cross-checked a curated 175-icon candidate list against it — every entry confirmed present. New file: `backend/app/agent/skills/elementor/icons.py` (`ALLOWED_ICONS`, `DEFAULT_ICON = "star"`, `safe_icon()`).
+2. `safe_icon()` is called defensively in `skill.py`'s `build_and_validate()` — the single choke point every `PageSpec` passes through — so **any** icon value that isn't in the verified-safe list is swapped for the default, regardless of what the model actually returned. This is a hard guarantee, not a prompt-compliance hope.
+3. `generator.py`'s system prompt now lists the exact 175 allowed icon names instead of vaguely saying "Font Awesome 6."
+4. **Found and fixed a second bug while verifying the first fix live:** the first version of `safe_icon()` stripped the `"fas fa-"` prefix and returned a bare name (e.g. `"camera"`). That produced a *different* PHP warning (`Undefined array key 0` at `font-awesome.php` line 19) because Elementor's own parser (`Font_Awesome::get_config()`) regex-extracts the icon name from the value via `preg_match('/fa(.*) fa-/', ...)` — it requires the full `"fas fa-camera"` form to match at all. Fixed by having `safe_icon()` always return the fully-prefixed form.
+5. Added regression tests (`tests/test_elementor_skill.py`) and a scored eval check (`app/evals/scenarios/elementor.py`'s `icons_are_safe`, plus a scenario that deliberately feeds `"fas fa-mountain-sun"` as input to prove the sanitization holds).
+
+**Verified live (twice — the fix needed a second pass):** wrote a real page with the exact offending icon (`fas fa-mountain-sun`) via the real REST pipeline against the Docker sandbox, confirmed via `docker logs` that no PHP warnings appeared, and screenshotted the result — the "Portraits" feature now shows a star icon (the safe fallback) instead of a broken one, with zero warnings.
+
+**Status:** Resolved. `backend/tests` full suite: 114 passed, 4 skipped (one pre-existing, unrelated Docker-environment failure). Not yet re-verified against `digi.local` itself (no credentials available in this session — see the request for a page link/screenshot in the same turn this was fixed).

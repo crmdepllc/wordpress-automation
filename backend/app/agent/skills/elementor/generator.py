@@ -15,6 +15,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.agent.skills.elementor.icons import ALLOWED_ICONS
 from app.agent.skills.elementor.library import catalog
 from app.agent.skills.elementor.schema import PageSpec
 from app.config import get_settings
@@ -29,13 +30,15 @@ _SYSTEM = (
     "Rules: start with a 'hero'. Any section whose catalog entry lists "
     "item_slots (e.g. features, pricing, testimonials, stats, faq) takes an "
     "`items` list — each item fills the item_slots, repeated once per item. "
-    "Fill scalar slots via `content`. A slot named 'icon' must be a Font "
-    "Awesome 6 free solid class, e.g. 'fas fa-bolt' — pick one that fits the "
-    "item. A slot named 'background_color' is optional (a hex code) — omit it "
-    "to use the site's default background. If you set 'background_color' to "
-    "something dark, also set 'heading_color' (where offered) to a light hex "
-    "code such as '#ffffff' so text stays readable, and vice versa for a light "
-    "background. Keep copy concise and real (no lorem ipsum)."
+    "Fill scalar slots via `content`. A slot named 'icon' must be one of this "
+    "exact list (the site's Elementor install only has these icons available "
+    "— anything else silently breaks): {icons}. Format it as 'fas fa-<name>', "
+    "e.g. 'fas fa-bolt'. A slot named 'background_color' is optional (a hex "
+    "code) — omit it to use the site's default background. If you set "
+    "'background_color' to something dark, also set 'heading_color' (where "
+    "offered) to a light hex code such as '#ffffff' so text stays readable, "
+    "and vice versa for a light background. Keep copy concise and real (no "
+    "lorem ipsum)."
 )
 
 
@@ -60,7 +63,10 @@ class LLMGenerator:
         return self._structured
 
     async def generate(self, brief: str) -> PageSpec:
-        system = _SYSTEM.format(catalog=json.dumps(catalog(), indent=2))
+        system = _SYSTEM.format(
+            catalog=json.dumps(catalog(), indent=2),
+            icons=", ".join(sorted(ALLOWED_ICONS)),
+        )
         result = await self._model().ainvoke(
             [SystemMessage(system), HumanMessage(brief)]
         )

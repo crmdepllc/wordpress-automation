@@ -280,6 +280,7 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 - **Live verification performed, end to end, against the actual running sandbox** (not a claim): built a 5-section page (hero/features/testimonials/faq/footer) through the real `generate_elementor_page` → `WordPressRestClient.create_elementor_page` → `wp elementor flush-css` pipeline, confirmed `_elementor_data` persisted (was previously silently dropped), confirmed the page rendered with visible Elementor CSS and all new widget types via a real Playwright screenshot, then re-verified after each bug fix until the page looked correct. Test pages and the throwaway Application Password were cleaned up afterward.
 - **Tests: 111 passed, 4 skipped.** Same one unrelated pre-existing `test_local_docker_executor_command` failure (Docker-environment mismatch, reproduces on `main`).
 - Follow-up: gallery/team/image+text-split section types need a real image-sourcing capability (stock library or AI image gen + `wp.upload_media`) — deferred. The Playwright baseline in `frontend/tests-visual/` can now be captured for real (the render blocker is fixed) — still not done as part of this pass since it wasn't the reported bug.
+- **Addendum:** the new `features` section's icon-box widget introduced its own bug — an icon outside Elementor's bundled Font Awesome 5.15.3 set caused live PHP warnings. Root-caused and fixed with a verified icon allowlist (`app/agent/skills/elementor/icons.py`); full writeup in `issues-list.md`, Issue 7.
 
 ---
 

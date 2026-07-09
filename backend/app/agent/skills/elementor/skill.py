@@ -11,6 +11,7 @@ from typing import Any
 
 from app.agent.skills.elementor.builder import build_page
 from app.agent.skills.elementor.generator import Generator, build_generator
+from app.agent.skills.elementor.icons import safe_icon
 from app.agent.skills.elementor.library import load_library
 from app.agent.skills.elementor.schema import PageSpec
 from app.agent.skills.elementor.validator import validate_elementor_data
@@ -24,6 +25,31 @@ class ElementorValidationError(Exception):
         super().__init__("Invalid Elementor data: " + "; ".join(errors))
 
 
+def _sanitize_icons(spec: PageSpec) -> PageSpec:
+    """Clamp every ``icon`` item slot to Elementor's bundled-safe icon set.
+
+    Elementor's SVG icon renderer only knows icons present in its own bundled
+    (older) Font Awesome dataset — an out-of-range value causes PHP warnings
+    and a broken icon on the live page, not a clean validation failure. This
+    runs regardless of what the model returned, so it's a hard guarantee, not
+    a prompt-compliance hope.
+    """
+    sections = [
+        s.model_copy(
+            update={
+                "items": [
+                    {**item, "icon": safe_icon(item["icon"])} if "icon" in item else item
+                    for item in s.items
+                ]
+            }
+        )
+        if s.items
+        else s
+        for s in spec.sections
+    ]
+    return spec.model_copy(update={"sections": sections})
+
+
 def build_and_validate(spec: PageSpec) -> list[dict[str, Any]]:
     """Compile a spec to ``_elementor_data`` and validate it, or raise."""
     # Drop any section whose type isn't in the library (defensive).
@@ -31,6 +57,7 @@ def build_and_validate(spec: PageSpec) -> list[dict[str, Any]]:
     spec = spec.model_copy(
         update={"sections": [s for s in spec.sections if s.type in known]}
     )
+    spec = _sanitize_icons(spec)
     data = build_page(spec)
     errors = validate_elementor_data(data)
     if errors:
