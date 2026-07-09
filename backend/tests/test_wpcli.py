@@ -71,6 +71,19 @@ async def test_wpcli_export_db_builds_args():
     assert result.ok
 
 
+async def test_update_post_meta_plain_vs_json():
+    rec = RecordingExecutor()
+    cli = WpCli(rec)
+    await cli.update_post_meta(4, "some_key", "plain value")
+    await cli.update_post_meta(4, "_elementor_page_settings", '{"a": 1}', as_json=True)
+    assert rec.calls[0] == ["post", "meta", "update", "4", "some_key", "plain value"]
+    # --format=json tells WP-CLI to decode+store a real PHP array, not a string
+    # — required for Elementor's Controls_Stack, which fatals on a plain string.
+    assert rec.calls[1] == [
+        "post", "meta", "update", "4", "_elementor_page_settings", '{"a": 1}', "--format=json",
+    ]
+
+
 async def test_local_docker_executor_command(monkeypatch):
     captured: dict[str, object] = {}
 

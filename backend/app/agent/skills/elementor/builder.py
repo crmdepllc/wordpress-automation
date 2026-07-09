@@ -57,6 +57,24 @@ def _build_grid(tmpl: SectionTemplate, section: SectionSpec) -> dict[str, Any]:
     return _fill_tokens(node, section.content)
 
 
+def _build_stack(tmpl: SectionTemplate, section: SectionSpec) -> dict[str, Any]:
+    """Clone one widget prototype once per item into a single column, stacked
+    vertically (unlike ``grid``, which clones a whole column side by side)."""
+    node = copy.deepcopy(tmpl.template)
+    column = node["elements"][0]  # stack templates have exactly one column
+    prototype = column["elements"][0]  # ...containing exactly one widget
+    items = section.items or [{}]
+
+    widgets: list[dict[str, Any]] = []
+    for item in items:
+        widget = copy.deepcopy(prototype)
+        widget = _fill_tokens(widget, {f"item.{k}": v for k, v in item.items()})
+        widgets.append(widget)
+
+    column["elements"] = widgets
+    return _fill_tokens(node, section.content)
+
+
 def _regenerate_ids(element: dict[str, Any], used: set[str]) -> None:
     new_id = _new_id()
     while new_id in used:
@@ -74,6 +92,8 @@ def build_page(spec: PageSpec) -> list[dict[str, Any]]:
         tmpl = get_template(section.type)
         if tmpl.layout == "grid":
             data.append(_build_grid(tmpl, section))
+        elif tmpl.layout == "stack":
+            data.append(_build_stack(tmpl, section))
         else:
             data.append(_build_single(tmpl, section))
 

@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "section_type": "faq",
+    "layout": "stack",
+    "scalar_slots": [],
+    "item_slots": ["question", "answer"]
+  },
+  "template": {
+    "id": "faq00000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "content_width": { "unit": "px", "size": 800 } },
+    "elements": [
+      {
+        "id": "faqcol00",
+        "elType": "column",
+        "settings": { "_column_size": 100, "_inline_size": null },
+        "elements": [
+          {
+            "id": "faqitm00",
+            "elType": "widget",
+            "widgetType": "toggle",
+            "settings": {
+              "tabs": [
+                {
+                  "_id": "faqtab01",
+                  "tab_title": "{{item.question}}",
+                  "tab_content": "{{item.answer}}"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

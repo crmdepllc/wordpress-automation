@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "section_type": "testimonials",
+    "layout": "grid",
+    "scalar_slots": [],
+    "item_slots": ["quote", "author", "role"]
+  },
+  "template": {
+    "id": "tst00000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "gap": "default" },
+    "elements": [
+      {
+        "id": "tstcol00",
+        "elType": "column",
+        "settings": { "_column_size": 33, "_inline_size": null },
+        "elements": [
+          {
+            "id": "tstwdg00",
+            "elType": "widget",
+            "widgetType": "testimonial",
+            "settings": {
+              "testimonial_content": "{{item.quote}}",
+              "testimonial_name": "{{item.author}}",
+              "testimonial_job": "{{item.role}}",
+              "testimonial_alignment": "center"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

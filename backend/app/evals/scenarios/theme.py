@@ -39,8 +39,9 @@ class _RecordingCli:
     async def get_post_meta(self, post_id, key):
         return CliResult(command="metaget", exit_code=0, stdout="{}")
 
-    async def update_post_meta(self, post_id, key, value):
+    async def update_post_meta(self, post_id, key, value, *, as_json=False):
         self.kit_meta = value
+        self.kit_meta_as_json = as_json
         return CliResult(command="metaset", exit_code=0)
 
 
@@ -73,12 +74,16 @@ async def _run(brief: str, spec: ThemeSpec) -> list[CheckResult]:
     fonts_applied = "wpa_font_heading" in cli.theme_mods and "wpa_font_body" in cli.theme_mods
     footer_applied = not spec.footer_text or cli.options.get("wpa_footer_text") == spec.footer_text
     kit_merged = cli.kit_meta is not None
+    # Must be a real PHP array via --format=json, not a plain JSON string —
+    # a string fatals Elementor's Controls_Stack (found via live verification).
+    kit_stored_as_array = getattr(cli, "kit_meta_as_json", False) is True
     return [
         CheckResult("all_wpcli_steps_ok", all_ok, weight=2),
         CheckResult("palette_applied", palette_applied, weight=1),
         CheckResult("fonts_applied", fonts_applied, weight=1),
         CheckResult("footer_applied", footer_applied, weight=1),
         CheckResult("elementor_kit_merged", kit_merged, weight=1),
+        CheckResult("elementor_kit_stored_as_array", kit_stored_as_array, weight=2),
     ]
 
 

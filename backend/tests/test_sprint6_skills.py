@@ -100,8 +100,9 @@ class RecordingCli:
     async def get_post_meta(self, post_id, key):
         return CliResult(command="metaget", exit_code=0, stdout="{}")
 
-    async def update_post_meta(self, post_id, key, value):
+    async def update_post_meta(self, post_id, key, value, *, as_json=False):
         self.kit_meta = value
+        self.kit_meta_as_json = as_json
         return CliResult(command="metaset", exit_code=0)
 
 
@@ -118,6 +119,10 @@ async def test_apply_theme_sets_mods_and_kit():
     assert cli.kit_meta is not None
     assert "system_colors" in json.loads(cli.kit_meta)
     assert any(r["step"] == "elementor_kit_colors" and r["ok"] for r in results)
+    # Must be written as a real PHP array (WP-CLI --format=json), not a plain
+    # JSON string — otherwise Elementor's Controls_Stack fatals trying to use
+    # a string as an array (found via live verification against a real site).
+    assert cli.kit_meta_as_json is True
 
 
 # --- Plugins ------------------------------------------------------------

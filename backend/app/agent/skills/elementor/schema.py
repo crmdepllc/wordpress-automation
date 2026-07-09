@@ -12,8 +12,11 @@ from pydantic import BaseModel, Field
 
 # The catalog of section types the agent may compose. Adding a section type
 # means adding an example template + (optional) slot metadata — not touching
-# the builder.
-SectionType = Literal["hero", "features", "pricing", "contact", "footer"]
+# the builder (unless it needs a new layout kind; see builder.py's "stack").
+SectionType = Literal[
+    "hero", "features", "pricing", "contact", "footer",
+    "testimonials", "stats", "faq", "cta_banner",
+]
 
 
 class SectionSpec(BaseModel):

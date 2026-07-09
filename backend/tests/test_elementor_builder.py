@@ -27,7 +27,7 @@ def _all_ids(data):
 
 def _sample_section(section_type: str) -> SectionSpec:
     tmpl = load_library()[section_type]
-    if tmpl.layout == "grid":
+    if tmpl.layout in ("grid", "stack"):
         items = [{s: f"{s}-{i}" for s in tmpl.item_slots} for i in range(3)]
         return SectionSpec(type=section_type, items=items)
     content = {s: f"{s} value" for s in tmpl.scalar_slots}
@@ -82,3 +82,27 @@ def test_tokens_are_fully_filled():
 def test_two_pages_get_different_ids():
     spec = PageSpec(title="T", sections=[_sample_section("hero")])
     assert set(_all_ids(build_page(spec))) != set(_all_ids(build_page(spec)))
+
+
+def test_stack_clones_one_widget_per_item_in_a_single_column():
+    spec = PageSpec(
+        title="T",
+        sections=[
+            SectionSpec(
+                type="faq",
+                items=[
+                    {"question": "Q1", "answer": "A1"},
+                    {"question": "Q2", "answer": "A2"},
+                    {"question": "Q3", "answer": "A3"},
+                ],
+            )
+        ],
+    )
+    section = build_page(spec)[0]
+    # One column (not one per item, unlike grid) containing one widget per item.
+    assert len(section["elements"]) == 1
+    column = section["elements"][0]
+    assert column["elType"] == "column"
+    assert len(column["elements"]) == 3
+    assert all(w["widgetType"] == "toggle" for w in column["elements"])
+    assert column["elements"][1]["settings"]["tabs"][0]["tab_title"] == "Q2"

@@ -24,16 +24,18 @@ _BRIEFS: dict[str, PageSpec] = {
     "photographer portfolio, dark minimal": PageSpec(
         title="Lens & Light",
         sections=[
-            SectionSpec(type="hero", content={"heading": "Lens & Light", "subheading": "Portrait photography", "cta_text": "Book a shoot"}),
-            SectionSpec(type="features", items=[{"title": "Portraits", "text": "Studio & natural light"}, {"title": "Events", "text": "Weddings & parties"}, {"title": "Editorial", "text": "Brand stories"}]),
-            SectionSpec(type="contact", content={"heading": "Get in touch", "subheading": "Let's plan your session", "email": "hi@lensandlight.test"}),
+            SectionSpec(type="hero", content={"heading": "Lens & Light", "subheading": "Portrait photography", "cta_text": "Book a shoot", "background_color": "#0d0d0d", "heading_color": "#ffffff"}),
+            SectionSpec(type="features", items=[{"title": "Portraits", "text": "Studio & natural light", "icon": "fas fa-camera"}, {"title": "Events", "text": "Weddings & parties", "icon": "fas fa-glass-cheers"}, {"title": "Editorial", "text": "Brand stories", "icon": "fas fa-pen-nib"}]),
+            SectionSpec(type="testimonials", items=[{"quote": "Best shoot we've ever had.", "author": "Mia R.", "role": "Bride"}, {"quote": "Professional and creative.", "author": "Sam T.", "role": "Founder"}]),
+            SectionSpec(type="contact", content={"heading": "Get in touch", "subheading": "Let's plan your session", "email": "hi@lensandlight.test", "background_color": "#0d0d0d", "heading_color": "#ffffff"}),
         ],
     ),
     "SaaS pricing landing page": PageSpec(
         title="FlowPad",
         sections=[
             SectionSpec(type="hero", content={"heading": "Ship faster with FlowPad", "subheading": "Docs that write themselves", "cta_text": "Start free"}),
-            SectionSpec(type="pricing", items=[{"plan_name": "Free", "price": "$0", "cta_text": "Start"}, {"plan_name": "Team", "price": "$12", "cta_text": "Try"}, {"plan_name": "Business", "price": "$29", "cta_text": "Buy"}]),
+            SectionSpec(type="pricing", items=[{"plan_name": "Free", "price": "$0", "tagline": "For side projects", "cta_text": "Start"}, {"plan_name": "Team", "price": "$12", "tagline": "For growing teams", "cta_text": "Try"}, {"plan_name": "Business", "price": "$29", "tagline": "For scaling companies", "cta_text": "Buy"}]),
+            SectionSpec(type="faq", items=[{"question": "Can I cancel anytime?", "answer": "Yes, no lock-in contracts."}, {"question": "Is there a free trial?", "answer": "Yes, 14 days on any paid plan."}]),
             SectionSpec(type="footer", content={"text": "© FlowPad"}),
         ],
     ),
@@ -67,12 +69,12 @@ _BRIEFS: dict[str, PageSpec] = {
 async def _run(brief: str, spec: PageSpec) -> list[CheckResult]:
     result = await generate_elementor_page(brief, generator=_FakeGenerator(spec))
     errors = validate_elementor_data(result["elementor_data"])
-    section_count_ok = 3 <= len(result["sections"]) <= 4
+    section_count_ok = 3 <= len(result["sections"]) <= 6
     sections_match = result["sections"] == [s.type for s in spec.sections]
     title_ok = result["title"] == spec.title
     return [
         CheckResult("valid_elementor_data", not errors, weight=2, detail="; ".join(errors)),
-        CheckResult("section_count_3_to_4", section_count_ok, weight=1),
+        CheckResult("section_count_3_to_6", section_count_ok, weight=1),
         CheckResult("requested_sections_present", sections_match, weight=1),
         CheckResult("title_matches", title_ok, weight=1),
     ]

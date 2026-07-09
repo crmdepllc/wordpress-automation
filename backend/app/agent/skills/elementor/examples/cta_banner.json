@@ -1,40 +1,39 @@
 {
   "meta": {
-    "section_type": "hero",
+    "section_type": "cta_banner",
     "layout": "single",
     "scalar_slots": ["heading", "subheading", "cta_text", "background_color", "heading_color"],
     "item_slots": []
   },
   "template": {
-    "id": "hero000",
+    "id": "ctb00000",
     "elType": "section",
     "settings": {
-      "layout": "boxed",
-      "content_width": { "unit": "px", "size": 1140 },
+      "layout": "full_width",
       "background_background": "classic",
       "background_color": "{{background_color}}",
-      "padding": { "unit": "px", "top": "80", "right": "20", "bottom": "80", "left": "20", "isLinked": false }
+      "padding": { "unit": "px", "top": "60", "right": "20", "bottom": "60", "left": "20", "isLinked": false }
     },
     "elements": [
       {
-        "id": "herocol",
+        "id": "ctbcol00",
         "elType": "column",
         "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "herohdg",
+            "id": "ctbhdg00",
             "elType": "widget",
             "widgetType": "heading",
-            "settings": { "title": "{{heading}}", "header_size": "h1", "align": "center", "title_color": "{{heading_color}}" }
+            "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
           },
           {
-            "id": "herosub",
+            "id": "ctbsub00",
             "elType": "widget",
             "widgetType": "heading",
-            "settings": { "title": "{{subheading}}", "header_size": "h3", "align": "center", "title_color": "{{heading_color}}" }
+            "settings": { "title": "{{subheading}}", "header_size": "h4", "align": "center", "title_color": "{{heading_color}}" }
           },
           {
-            "id": "herocta",
+            "id": "ctbcta00",
             "elType": "widget",
             "widgetType": "button",
             "settings": { "text": "{{cta_text}}", "align": "center", "size": "lg", "link": { "url": "#", "is_external": "", "nofollow": "" } }

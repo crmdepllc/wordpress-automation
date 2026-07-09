@@ -3,7 +3,7 @@
     "section_type": "features",
     "layout": "grid",
     "scalar_slots": [],
-    "item_slots": ["title", "text"]
+    "item_slots": ["title", "text", "icon"]
   },
   "template": {
     "id": "feat000",
@@ -16,16 +16,16 @@
         "settings": { "_column_size": 33, "_inline_size": null },
         "elements": [
           {
-            "id": "featttl",
+            "id": "featico",
             "elType": "widget",
-            "widgetType": "heading",
-            "settings": { "title": "{{item.title}}", "header_size": "h3", "align": "center" }
-          },
-          {
-            "id": "feattxt",
-            "elType": "widget",
-            "widgetType": "text-editor",
-            "settings": { "editor": "{{item.text}}", "align": "center" }
+            "widgetType": "icon-box",
+            "settings": {
+              "title_text": "{{item.title}}",
+              "description_text": "{{item.text}}",
+              "selected_icon": { "value": "{{item.icon}}", "library": "fa-solid" },
+              "position": "top",
+              "title_size": "h3"
+            }
           }
         ]
       }

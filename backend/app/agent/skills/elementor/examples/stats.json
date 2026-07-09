@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "section_type": "stats",
+    "layout": "grid",
+    "scalar_slots": [],
+    "item_slots": ["number", "label"]
+  },
+  "template": {
+    "id": "stt00000",
+    "elType": "section",
+    "settings": { "layout": "boxed", "gap": "default" },
+    "elements": [
+      {
+        "id": "sttcol00",
+        "elType": "column",
+        "settings": { "_column_size": 25, "_inline_size": null },
+        "elements": [
+          {
+            "id": "sttnum00",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{item.number}}", "header_size": "h2", "align": "center" }
+          },
+          {
+            "id": "sttlbl00",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{item.label}}", "header_size": "h5", "align": "center" }
+          }
+        ]
+      }
+    ]
+  }
+}

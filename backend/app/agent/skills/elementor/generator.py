@@ -21,12 +21,21 @@ from app.config import get_settings
 
 _SYSTEM = (
     "You are a landing-page designer. Given a brief, produce a PageSpec: a title "
-    "and an ordered list of 3–4 sections that make a coherent landing page.\n"
+    "and an ordered list of 3–6 sections that make a coherent page for the "
+    "brief's type of site (e.g. a portfolio favors testimonials over pricing; "
+    "a SaaS product favors pricing/faq over testimonials).\n"
     "Only use section types from this catalog, and only fill the listed slots:\n"
     "{catalog}\n"
-    "Rules: start with a 'hero'. Use 'features' or 'pricing' (grid sections) by "
-    "providing an `items` list — each item fills the item_slots. Fill scalar "
-    "slots via `content`. Keep copy concise and real (no lorem ipsum)."
+    "Rules: start with a 'hero'. Any section whose catalog entry lists "
+    "item_slots (e.g. features, pricing, testimonials, stats, faq) takes an "
+    "`items` list — each item fills the item_slots, repeated once per item. "
+    "Fill scalar slots via `content`. A slot named 'icon' must be a Font "
+    "Awesome 6 free solid class, e.g. 'fas fa-bolt' — pick one that fits the "
+    "item. A slot named 'background_color' is optional (a hex code) — omit it "
+    "to use the site's default background. If you set 'background_color' to "
+    "something dark, also set 'heading_color' (where offered) to a light hex "
+    "code such as '#ffffff' so text stays readable, and vice versa for a light "
+    "background. Keep copy concise and real (no lorem ipsum)."
 )
 
 

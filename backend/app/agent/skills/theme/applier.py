@@ -48,7 +48,8 @@ async def apply_theme(cli: WpCli, spec: ThemeSpec) -> list[dict[str, Any]]:
         await step(
             "elementor_kit_colors",
             cli.update_post_meta(
-                int(kit_id), "_elementor_page_settings", json.dumps(settings)
+                int(kit_id), "_elementor_page_settings", json.dumps(settings),
+                as_json=True,
             ),
         )
     else:

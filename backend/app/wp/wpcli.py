@@ -196,11 +196,23 @@ class WpCli:
         """Read a WordPress option (e.g. the active Elementor kit id)."""
         return await self._executor.run(["option", "get", name])
 
-    async def update_post_meta(self, post_id: int, key: str, value: str) -> CliResult:
-        """Set a single post-meta value (used for Elementor kit settings)."""
-        return await self._executor.run(
-            ["post", "meta", "update", str(post_id), key, value]
-        )
+    async def update_post_meta(
+        self, post_id: int, key: str, value: str, *, as_json: bool = False
+    ) -> CliResult:
+        """Set a single post-meta value (used for Elementor kit settings).
+
+        ``as_json=True`` tells WP-CLI to decode ``value`` as JSON and store the
+        result as a properly PHP-serialized array via ``update_post_meta()``.
+        Required for structured meta like Elementor's
+        ``_elementor_page_settings``: writing a plain JSON *string* (the
+        default) stores a literal string in postmeta, and Elementor's
+        ``Controls_Stack::sanitize_settings()`` fatals with a TypeError when it
+        tries to use that string as an array.
+        """
+        args = ["post", "meta", "update", str(post_id), key, value]
+        if as_json:
+            args.append("--format=json")
+        return await self._executor.run(args)
 
     async def get_post_meta(self, post_id: int, key: str) -> CliResult:
         """Read a single post-meta value as JSON."""

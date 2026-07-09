@@ -249,6 +249,40 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
+## Companion WP plugin + richer Elementor templates — ✅ COMPLETE (post-Sprint 8 fix)
+
+**Phase:** Hardening (unscheduled — user-reported bug, fixed before starting Sprint 9)
+
+**Goal:** Close the "companion WP plugin" gap that had been open and deferred since Sprint 5, and make generated Elementor pages meaningfully richer, per direct user feedback: *"pages are too simple / CSS is not loading."*
+
+**Tasks**
+- [x] Build the companion WP plugin (mu-plugin) so `_elementor_data` + SEO meta actually persist over REST
+- [x] Expand the Elementor section library: richer widgets in the existing 5 sections, 4 new section types
+- [x] Verify live against the real Docker sandbox (not left as another "not verified live" caveat)
+
+**Deliverable:** A brief produces a real, styled, multi-section Elementor page on a live site — confirmed by actually looking at it, not just by structural validation. — **Met.**
+
+**Architecture decisions (via /architect)**
+- **Plugin = mu-plugin, explicit meta-key allowlist.** `wp-plugin/wpa-companion/wpa-companion.php` registers exactly the 7 protected meta keys the codebase writes (3 Elementor, 2 Yoast, 2 RankMath, 1 our own JSON-LD) with `show_in_rest`, each gated by an `edit_post` `auth_callback` — not a wildcard. Auto-loads with zero activation step. Delivered via existing channels only: Docker bind-mount for dev, Fabric/Paramiko file upload for real sites (per AGENTS.md's WordPress integration rules) — no new channel invented.
+- **Richness = both deeper existing sections and new non-photo types.** hero/features/pricing/contact/footer gained background colors, icon-box/icon-list/testimonial-style widgets, and more slots; 4 new section types (testimonials, stats, faq, cta_banner) were chosen specifically to avoid needing real photos (no image-sourcing capability exists yet) — gallery/team/image-split are explicitly deferred.
+- **FAQ needed a new `"stack"` builder layout** (clone one widget prototype N times into a single column, vs. `"grid"`'s N-columns-side-by-side) — the only structural change to `builder.py`; `validator.py` needed no changes.
+- **Verify live, not gated.** Since the Docker sandbox was actually running with a real Elementor install, this pass wrote real pages via the real REST client and looked at the actual rendered output (Playwright screenshots) instead of leaving persistence/rendering as an unverified caveat like Sprints 5/6/8 had to.
+
+**Notes / what shipped — and two real bugs live verification caught that offline/structural checks could not**
+- `wp-plugin/wpa-companion/wpa-companion.php` (new) + `wp-plugin/README.md`; bind-mounted into the `wordpress`/`wpcli` Docker services. **This alone did not fully fix the user's report** — see below.
+- `app/agent/skills/elementor/schema.py`: `SectionType` widened from 5 to 9 (`+testimonials, stats, faq, cta_banner`).
+- `app/agent/skills/elementor/examples/`: all 5 existing templates enriched (background/heading colors; `features` now uses `icon-box`; `contact` now uses `icon-list`; `pricing` gained a `tagline` slot); 4 new templates added.
+- `app/agent/skills/elementor/builder.py`: new `_build_stack()` + dispatch.
+- `app/agent/skills/elementor/generator.py`: system prompt now covers icon slots (Font Awesome 6 free-solid classes), the `background_color`/`heading_color` contrast pairing, and loosens section-count guidance from 3–4 to 3–6.
+- **Bug #1 (live-verification-only): Elementor's Toggle widget needs a `settings.tabs` repeater array**, not flat `tab_title`/`tab_content` keys. The first live render showed Elementor's own placeholder text ("Toggle #1"/"Toggle #2") instead of our questions — structurally valid JSON, wrong widget-settings shape. Fixed in `faq.json`.
+- **Bug #2 (live-verification-only, pre-existing since Sprint 6): `theme/applier.py`'s Elementor-kit color merge wrote `_elementor_page_settings` as a plain JSON *string* via WP-CLI**, but Elementor's `Controls_Stack::sanitize_settings()` requires a real PHP array — WordPress does not auto-decode JSON strings the way it auto-unserializes PHP-serialized data. The mismatch caused an **uncaught PHP `TypeError` fatal on every single frontend page load** once a theme had been applied — a completely blank white page with a 200 status, which is exactly what "CSS is not loading" looks like from the outside. Root-caused via `docker logs` on the live sandbox, not something any offline test could have caught. Fixed by adding `WpCli.update_post_meta(..., as_json=True)` (`--format=json`, which tells WP-CLI to decode-then-properly-serialize), used by `applier.py`'s kit-color step. Both the corrupted live Kit meta and the code were fixed; also pinned with a new assertion in `test_apply_theme_sets_mods_and_kit` and a new `elementor_kit_stored_as_array` eval check.
+- Contrast follow-up found in the same live pass: a dark `background_color` with no matching text color made headings unreadable. Added a paired `heading_color` slot (hero/footer/contact/cta_banner) wired to `title_color`/`text_color`, and the generator prompt now instructs pairing them.
+- **Live verification performed, end to end, against the actual running sandbox** (not a claim): built a 5-section page (hero/features/testimonials/faq/footer) through the real `generate_elementor_page` → `WordPressRestClient.create_elementor_page` → `wp elementor flush-css` pipeline, confirmed `_elementor_data` persisted (was previously silently dropped), confirmed the page rendered with visible Elementor CSS and all new widget types via a real Playwright screenshot, then re-verified after each bug fix until the page looked correct. Test pages and the throwaway Application Password were cleaned up afterward.
+- **Tests: 111 passed, 4 skipped.** Same one unrelated pre-existing `test_local_docker_executor_command` failure (Docker-environment mismatch, reproduces on `main`).
+- Follow-up: gallery/team/image+text-split section types need a real image-sourcing capability (stock library or AI image gen + `wp.upload_media`) — deferred. The Playwright baseline in `frontend/tests-visual/` can now be captured for real (the render blocker is fixed) — still not done as part of this pass since it wasn't the reported bug.
+
+---
+
 ## Sprint 9 — Security hardening
 
 **Phase:** Hardening

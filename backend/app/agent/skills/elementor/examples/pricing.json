@@ -3,7 +3,7 @@
     "section_type": "pricing",
     "layout": "grid",
     "scalar_slots": [],
-    "item_slots": ["plan_name", "price", "cta_text"]
+    "item_slots": ["plan_name", "price", "tagline", "cta_text"]
   },
   "template": {
     "id": "prc0000",
@@ -26,6 +26,12 @@
             "elType": "widget",
             "widgetType": "heading",
             "settings": { "title": "{{item.price}}", "header_size": "h2", "align": "center" }
+          },
+          {
+            "id": "prctag0",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{item.tagline}}", "align": "center" }
           },
           {
             "id": "prccta0",

@@ -2,13 +2,18 @@
   "meta": {
     "section_type": "footer",
     "layout": "single",
-    "scalar_slots": ["text"],
+    "scalar_slots": ["text", "background_color", "heading_color"],
     "item_slots": []
   },
   "template": {
     "id": "ftr0000",
     "elType": "section",
-    "settings": { "layout": "full_width" },
+    "settings": {
+      "layout": "full_width",
+      "background_background": "classic",
+      "background_color": "{{background_color}}",
+      "padding": { "unit": "px", "top": "30", "right": "20", "bottom": "30", "left": "20", "isLinked": false }
+    },
     "elements": [
       {
         "id": "ftrcol0",
@@ -19,7 +24,7 @@
             "id": "ftrtxt0",
             "elType": "widget",
             "widgetType": "text-editor",
-            "settings": { "editor": "{{text}}", "align": "center" }
+            "settings": { "editor": "{{text}}", "align": "center", "text_color": "{{heading_color}}" }
           }
         ]
       }
