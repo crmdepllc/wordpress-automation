@@ -49,6 +49,14 @@ def test_ids_are_regenerated_and_unique():
     assert "hero000" not in ids and "featcol" not in ids
 
 
+def _inner_grid(section):
+    """Grid/stack sections nest as section -> column -> [...heading, inner
+    section] so a heading can sit above the repeated items; the inner section
+    (last child of the outer column) holds the actual item columns."""
+    outer_column = section["elements"][0]
+    return outer_column["elements"][-1]
+
+
 def test_grid_columns_match_item_count_and_sizes():
     spec = PageSpec(
         title="T",
@@ -60,8 +68,9 @@ def test_grid_columns_match_item_count_and_sizes():
         ],
     )
     section = build_page(spec)[0]
-    assert len(section["elements"]) == 2
-    assert [c["settings"]["_column_size"] for c in section["elements"]] == [50, 50]
+    inner = _inner_grid(section)
+    assert len(inner["elements"]) == 2
+    assert [c["settings"]["_column_size"] for c in inner["elements"]] == [50, 50]
 
 
 def test_tokens_are_fully_filled():
@@ -99,10 +108,54 @@ def test_stack_clones_one_widget_per_item_in_a_single_column():
         ],
     )
     section = build_page(spec)[0]
+    inner = _inner_grid(section)
     # One column (not one per item, unlike grid) containing one widget per item.
-    assert len(section["elements"]) == 1
-    column = section["elements"][0]
+    assert len(inner["elements"]) == 1
+    column = inner["elements"][0]
     assert column["elType"] == "column"
     assert len(column["elements"]) == 3
     assert all(w["widgetType"] == "toggle" for w in column["elements"])
     assert column["elements"][1]["settings"]["tabs"][0]["tab_title"] == "Q2"
+
+
+def test_section_scalar_token_survives_inside_a_cloned_item_prototype():
+    """A grid item prototype can contain a section-level scalar token (e.g.
+    icon-box's primary_color fed by {{accent_color}}) alongside {{item.*}}
+    tokens. Found live: the item-only fill pass was blanking accent_color
+    before the section-content pass ever ran, so icon-circle backgrounds
+    rendered as Elementor's default instead of the page's accent color."""
+    spec = PageSpec(
+        title="T",
+        sections=[
+            SectionSpec(
+                type="features",
+                content={"accent_color": "#7a1f2b"},
+                items=[{"title": "a", "text": "x", "icon": "fas fa-star"}],
+            )
+        ],
+    )
+    section = build_page(spec)[0]
+    inner = _inner_grid(section)
+    icon_box = inner["elements"][0]["elements"][0]
+    assert icon_box["settings"]["primary_color"] == "#7a1f2b"
+
+
+def test_grid_section_heading_is_filled_and_items_still_clone():
+    """A heading above the grid (outside the inner section) must fill from
+    section.content while the inner section still clones per-item, proving
+    the two token-fill passes (item then content) both reach their targets."""
+    spec = PageSpec(
+        title="T",
+        sections=[
+            SectionSpec(
+                type="features",
+                content={"heading": "Our Services", "accent_color": "#7a1f2b"},
+                items=[{"title": "a", "text": "x"}, {"title": "b", "text": "y"}],
+            )
+        ],
+    )
+    section = build_page(spec)[0]
+    blob = json.dumps(section)
+    assert "Our Services" in blob
+    inner = _inner_grid(section)
+    assert len(inner["elements"]) == 2

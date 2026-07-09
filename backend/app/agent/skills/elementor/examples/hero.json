@@ -2,7 +2,7 @@
   "meta": {
     "section_type": "hero",
     "layout": "single",
-    "scalar_slots": ["heading", "subheading", "cta_text", "background_color", "heading_color"],
+    "scalar_slots": ["eyebrow", "heading", "subheading", "cta_text", "background_color", "heading_color", "accent_color"],
     "item_slots": []
   },
   "template": {
@@ -13,7 +13,7 @@
       "content_width": { "unit": "px", "size": 1140 },
       "background_background": "classic",
       "background_color": "{{background_color}}",
-      "padding": { "unit": "px", "top": "80", "right": "20", "bottom": "80", "left": "20", "isLinked": false }
+      "padding": { "unit": "px", "top": "100", "right": "20", "bottom": "100", "left": "20", "isLinked": false }
     },
     "elements": [
       {
@@ -21,6 +21,12 @@
         "elType": "column",
         "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
+          {
+            "id": "heroeyb0",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{eyebrow}}", "header_size": "h6", "align": "center", "title_color": "{{accent_color}}" }
+          },
           {
             "id": "herohdg",
             "elType": "widget",
@@ -37,7 +43,7 @@
             "id": "herocta",
             "elType": "widget",
             "widgetType": "button",
-            "settings": { "text": "{{cta_text}}", "align": "center", "size": "lg", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+            "settings": { "text": "{{cta_text}}", "align": "center", "size": "lg", "background_color": "{{accent_color}}", "link": { "url": "#", "is_external": "", "nofollow": "" } }
           }
         ]
       }

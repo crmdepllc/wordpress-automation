@@ -2,32 +2,73 @@
   "meta": {
     "section_type": "faq",
     "layout": "stack",
-    "scalar_slots": [],
+    "scalar_slots": ["eyebrow", "heading", "subheading", "accent_color", "background_color", "heading_color"],
     "item_slots": ["question", "answer"]
   },
   "template": {
     "id": "faq00000",
     "elType": "section",
-    "settings": { "layout": "boxed", "content_width": { "unit": "px", "size": 800 } },
+    "settings": {
+      "layout": "full_width",
+      "background_background": "classic",
+      "background_color": "{{background_color}}",
+      "padding": { "unit": "px", "top": "80", "right": "20", "bottom": "80", "left": "20", "isLinked": false }
+    },
     "elements": [
       {
-        "id": "faqcol00",
+        "id": "faqoutr0",
         "elType": "column",
         "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "faqitm00",
+            "id": "faqeyb00",
             "elType": "widget",
-            "widgetType": "toggle",
+            "widgetType": "heading",
+            "settings": { "title": "{{eyebrow}}", "header_size": "h6", "align": "center", "title_color": "{{accent_color}}" }
+          },
+          {
+            "id": "faqhdg00",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
+          },
+          {
+            "id": "faqsub00",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{subheading}}", "align": "center", "text_color": "{{heading_color}}" }
+          },
+          {
+            "id": "faqgrd00",
+            "elType": "section",
             "settings": {
-              "tabs": [
-                {
-                  "_id": "faqtab01",
-                  "tab_title": "{{item.question}}",
-                  "tab_content": "{{item.answer}}"
-                }
-              ]
-            }
+              "layout": "boxed",
+              "content_width": { "unit": "px", "size": 800 },
+              "margin": { "unit": "px", "top": "40", "right": "0", "bottom": "0", "left": "0", "isLinked": false }
+            },
+            "elements": [
+              {
+                "id": "faqcol00",
+                "elType": "column",
+                "settings": { "_column_size": 100, "_inline_size": null },
+                "elements": [
+                  {
+                    "id": "faqitm00",
+                    "elType": "widget",
+                    "widgetType": "toggle",
+                    "settings": {
+                      "tabs": [
+                        {
+                          "_id": "faqtab01",
+                          "tab_title": "{{item.question}}",
+                          "tab_content": "{{item.answer}}"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

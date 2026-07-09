@@ -1,12 +1,12 @@
 {
   "meta": {
-    "section_type": "stats",
+    "section_type": "badges",
     "layout": "grid",
     "scalar_slots": ["eyebrow", "heading", "accent_color", "background_color", "heading_color"],
-    "item_slots": ["number", "label"]
+    "item_slots": ["label", "icon"]
   },
   "template": {
-    "id": "stt00000",
+    "id": "bdg00000",
     "elType": "section",
     "settings": {
       "layout": "full_width",
@@ -16,24 +16,24 @@
     },
     "elements": [
       {
-        "id": "sttoutr0",
+        "id": "bdgoutr0",
         "elType": "column",
         "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "stteyb00",
+            "id": "bdgeyb00",
             "elType": "widget",
             "widgetType": "heading",
             "settings": { "title": "{{eyebrow}}", "header_size": "h6", "align": "center", "title_color": "{{accent_color}}" }
           },
           {
-            "id": "stthdg00",
+            "id": "bdghdg00",
             "elType": "widget",
             "widgetType": "heading",
             "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
           },
           {
-            "id": "sttgrd00",
+            "id": "bdggrd00",
             "elType": "section",
             "settings": {
               "layout": "boxed",
@@ -42,21 +42,24 @@
             },
             "elements": [
               {
-                "id": "sttcol00",
+                "id": "bdgcol00",
                 "elType": "column",
                 "settings": { "_column_size": 25, "_inline_size": null },
                 "elements": [
                   {
-                    "id": "sttnum00",
+                    "id": "bdgico00",
                     "elType": "widget",
-                    "widgetType": "heading",
-                    "settings": { "title": "{{item.number}}", "header_size": "h2", "align": "center", "title_color": "{{accent_color}}" }
-                  },
-                  {
-                    "id": "sttlbl00",
-                    "elType": "widget",
-                    "widgetType": "heading",
-                    "settings": { "title": "{{item.label}}", "header_size": "h5", "align": "center", "title_color": "{{heading_color}}" }
+                    "widgetType": "icon-box",
+                    "settings": {
+                      "title_text": "{{item.label}}",
+                      "selected_icon": { "value": "{{item.icon}}", "library": "fa-solid" },
+                      "position": "top",
+                      "title_size": "h5",
+                      "view": "stacked",
+                      "shape": "circle",
+                      "primary_color": "{{accent_color}}",
+                      "secondary_color": "#ffffff"
+                    }
                   }
                 ]
               }

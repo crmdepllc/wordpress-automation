@@ -130,7 +130,7 @@ backend/
     │   │   │   ├── validator.py # Structural + semantic checks before any write
     │   │   │   ├── generator.py # Brief → PageSpec via Claude (lazy, structured output)
     │   │   │   ├── skill.py     # generate → build → validate pipeline
-    │   │   │   └── examples/    # 9 section templates (hero/features/pricing/contact/footer/testimonials/stats/faq/cta_banner) + README
+    │   │   │   └── examples/    # 11 section templates (hero/features/pricing/contact/footer/testimonials/stats/faq/cta_banner/about/badges) + README
     │   │   ├── content/   # Brief → PostDraft (title/body/terms) via Claude
     │   │   ├── seo/       # Subject → SeoMeta + JSON-LD; Yoast/RankMath meta keys
     │   │   ├── theme/     # Brief → ThemeSpec; applied via WP-CLI mods + Elementor kit
@@ -153,8 +153,8 @@ backend/
         ├── thresholds.py   # Per-skill minimum score (CI regression floor)
         ├── runner.py       # run_skill()/run_all() — executes every scenario, offline
         ├── report.py       # Markdown (job summary) + JSON (artifact) rendering
-        └── scenarios/      # One file per skill — 23 scenarios total
-            ├── elementor.py    # 5 (relocated from the old test_elementor_skill.py)
+        └── scenarios/      # One file per skill — 24 scenarios total
+            ├── elementor.py    # 6 (relocated from the old test_elementor_skill.py)
             ├── content.py      # 4
             ├── seo.py          # 4
             ├── theme.py        # 3

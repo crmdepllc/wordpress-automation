@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 SectionType = Literal[
     "hero", "features", "pricing", "contact", "footer",
     "testimonials", "stats", "faq", "cta_banner",
+    "about", "badges",
 ]
 
 

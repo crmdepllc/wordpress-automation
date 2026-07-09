@@ -281,6 +281,44 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 - **Tests: 111 passed, 4 skipped.** Same one unrelated pre-existing `test_local_docker_executor_command` failure (Docker-environment mismatch, reproduces on `main`).
 - Follow-up: gallery/team/image+text-split section types need a real image-sourcing capability (stock library or AI image gen + `wp.upload_media`) — deferred. The Playwright baseline in `frontend/tests-visual/` can now be captured for real (the render blocker is fixed) — still not done as part of this pass since it wasn't the reported bug.
 - **Addendum:** the new `features` section's icon-box widget introduced its own bug — an icon outside Elementor's bundled Font Awesome 5.15.3 set caused live PHP warnings. Root-caused and fixed with a verified icon allowlist (`app/agent/skills/elementor/icons.py`); full writeup in `issues-list.md`, Issue 7.
+- **Addendum 2 — design review against real published pages:** user published 3 real generated pages on `digi.local`; direct inspection (screenshots + rendered CSS, not guessing) found the structural content was actually solid (5–6 sections, real copy, working icons), but two real polish gaps: (a) Elementor buttons had no explicit color and fell back to a clashing default green — fixed with a `button_color` slot reused consistently across a page's buttons; (b) the Sprint 6 theme skill has **zero visible effect** on the Astra theme specifically — confirmed via the live page's own CSS (`--ast-global-color-*`, default system font stack) — Astra stores its palette/typography in its own option schema, not generic `theme_mod` keys. (a) is fixed and live-verified; (b) is a documented, scoped follow-up (needs its own research pass into Astra's real option format, not a guess). Full writeup in `issues-list.md`, Issue 8.
+
+---
+
+## Elementor style-only production-quality upgrade — ✅ COMPLETE (post-Sprint 8 fix)
+
+**Phase:** Hardening (unscheduled — direct user follow-up to the Issue 8 design review, this time with a concrete screenshot of a real production site as the bar to hit)
+
+**Goal:** Close the remaining visual gap between generated pages and a real, professionally-designed site — without any new image-sourcing capability, so purely via richer use of existing Elementor widgets (color, shadow, border-radius, icon-circle badges) and two structural gaps (no heading above a grid, no bio/trust-badge section types).
+
+**Tasks**
+- [x] `builder.py`: grid/stack sections can now carry an optional heading/eyebrow/subheading above their repeated items (previously structurally impossible)
+- [x] Unify `button_color` → `accent_color`, driving both button backgrounds and icon-circle backgrounds, enforced by eval rather than prompt-only convention
+- [x] Card styling (`border_radius`/`box_shadow`/`padding`) on `features`/`testimonials`/`pricing`/`about`/`contact`; icon-circle badges on `features`/`badges`
+- [x] Two new section types (`about`, `badges`); `footer` converted to a heading + link-column grid
+- [x] Live-verify against the Docker sandbox with the exact brief that motivated the request (a notary-services site)
+
+**Deliverable:** The exact brief that prompted the user's complaint (a mobile/online notary site) produces a real, styled, multi-section page — confirmed by building it through the real pipeline and screenshotting the actual rendered result. — **Met.**
+
+**Architecture decisions (via `/architect`, confirmed with the user before building)**
+- **Style-only, no new images.** Photo-based screenshot elements (hero photo, headshot, testimonial avatars, map) stayed explicitly out of scope pending a real image-sourcing capability — everything shipped uses only color/shadow/icon substitutes.
+- **New section types kept to exactly two** (`about`, `badges`) plus a `footer` structural upgrade — everything else stayed enrichment-only on the existing 9 types, to avoid catalog bloat.
+- **FAQ stayed single-column** — a 2-column variant would have needed a second new `builder.py` layout mode for a purely cosmetic gain.
+- **Contact form stayed the icon-list approach** — Elementor's real Form widget has an unverified settings schema; building it from assumption would have violated AGENTS.md rule #3.
+- **Grid/stack heading support = a nested-section wrapper**, not a new layout keyword: `section -> column -> [heading widgets..., inner section]`, reusing the fact that `validator.py` already permits a section as a column's child — the real Elementor pattern for title-above-grid layouts.
+
+**Notes / what shipped — and two real bugs live verification caught**
+- `app/agent/skills/elementor/schema.py`: `SectionType` widened from 9 to 11 (`+about, badges`).
+- `app/agent/skills/elementor/builder.py`: `_build_grid`/`_build_stack` now locate the item prototype one level deeper via a new inner-section convention; `_fill_tokens` gained a `blank_unmatched` flag (see Bug #1 below).
+- `app/agent/skills/elementor/examples/`: `hero`/`cta_banner` renamed `button_color`→`accent_color`; `features`/`testimonials`/`pricing`/`stats`/`faq` migrated to the nested wrapper with heading/eyebrow slots; `about.json` and `badges.json` added; `footer.json` converted to a heading + link-column grid; `contact.json` got card styling + `accent_color`-driven icon color.
+- `app/agent/skills/elementor/generator.py`: system prompt now covers `accent_color` (buttons + icon circles, one value per page), heading/eyebrow guidance for grid/stack sections, background alternation for visual rhythm, and `about`/`badges` for local-service-type briefs.
+- `app/evals/scenarios/elementor.py`: `button_colors_applied` → `accent_color_applied` (now also checks icon-box `primary_color`); added `accent_color_consistent`; added a 6th scenario (a notary/local-service brief exercising `about`/`badges`/the enriched `footer`) — 24 scenarios total across all skills.
+- **Bug #1 (live-verification-only): `builder.py`'s per-item token-fill pass was blanking section-level scalar tokens.** A grid item prototype can contain both `{{item.x}}` tokens and a section-scalar token (e.g. `icon-box`'s `primary_color` fed by `{{accent_color}}`). The item-only fill pass replaced *any* unmatched token with `""`, so `{{accent_color}}` was wiped out before the later section-content pass ever ran — confirmed by inspecting the real stored `_elementor_data` (`"primary_color": ""`) and visually via a live screenshot showing Elementor's plain black/white default instead of the page's accent color. Fixed with a `blank_unmatched` flag: the item pass now leaves unmatched tokens untouched; only the final section-content pass blanks genuinely-omitted optional slots. Added a regression test.
+- **Bug #2 (live-verification-only): testimonial text unreadable on a dark section background.** `heading_color` was only wired to a section's own heading/subheading widgets, not to the `testimonial` widget's own text controls — so a dark-background testimonials section (which the generator is instructed to use for visual rhythm) rendered its quote/name/role text in Elementor's default dark gray, nearly invisible. Read the real widget source (`elementor/includes/widgets/testimonial.php`) for the actual control names (`content_content_color`, `name_text_color`, `job_text_color`) and wired all three to `heading_color`.
+- **Verified live, iteratively, against the real Docker sandbox:** built the exact notary-services brief through the real `wp_create_elementor_page` tool three times (once per bug found), confirmed `_elementor_data` persisted correctly, checked `docker logs` for PHP warnings (none new), and screenshotted the final rendered page with Playwright — accent-colored icon circles, readable testimonial text, card shadows, and section headings above every grid all render correctly. Test pages cleaned up afterward.
+- **Tests: 118 passed, 4 skipped.** Same one pre-existing, unrelated `test_local_docker_executor_command` failure (reproduces on `main`).
+- Full writeup in `issues-list.md`, Issue 9.
+- Follow-up: photo-based sections (real hero/about photography, testimonial avatars, map embed) remain deferred pending an image-sourcing capability — same documented gap as the Sprint 5/6 gallery/team deferral.
 
 ---
 

@@ -1,9 +1,9 @@
 {
   "meta": {
     "section_type": "footer",
-    "layout": "single",
-    "scalar_slots": ["text", "background_color", "heading_color"],
-    "item_slots": []
+    "layout": "grid",
+    "scalar_slots": ["tagline", "accent_color", "background_color", "heading_color"],
+    "item_slots": ["column_title", "column_text"]
   },
   "template": {
     "id": "ftr0000",
@@ -12,19 +12,52 @@
       "layout": "full_width",
       "background_background": "classic",
       "background_color": "{{background_color}}",
-      "padding": { "unit": "px", "top": "30", "right": "20", "bottom": "30", "left": "20", "isLinked": false }
+      "border_border": "solid",
+      "border_width": { "unit": "px", "top": "3", "right": "0", "bottom": "0", "left": "0", "isLinked": false },
+      "border_color": "{{accent_color}}",
+      "padding": { "unit": "px", "top": "60", "right": "20", "bottom": "40", "left": "20", "isLinked": false }
     },
     "elements": [
       {
-        "id": "ftrcol0",
+        "id": "ftroutr0",
         "elType": "column",
         "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "ftrtxt0",
+            "id": "ftrtgl00",
             "elType": "widget",
-            "widgetType": "text-editor",
-            "settings": { "editor": "{{text}}", "align": "center", "text_color": "{{heading_color}}" }
+            "widgetType": "heading",
+            "settings": { "title": "{{tagline}}", "header_size": "h4", "align": "center", "title_color": "{{heading_color}}" }
+          },
+          {
+            "id": "ftrgrd00",
+            "elType": "section",
+            "settings": {
+              "layout": "boxed",
+              "gap": "default",
+              "margin": { "unit": "px", "top": "30", "right": "0", "bottom": "0", "left": "0", "isLinked": false }
+            },
+            "elements": [
+              {
+                "id": "ftrcol0",
+                "elType": "column",
+                "settings": { "_column_size": 25, "_inline_size": null },
+                "elements": [
+                  {
+                    "id": "ftrcth0",
+                    "elType": "widget",
+                    "widgetType": "heading",
+                    "settings": { "title": "{{item.column_title}}", "header_size": "h5", "align": "center", "title_color": "{{accent_color}}" }
+                  },
+                  {
+                    "id": "ftrctx0",
+                    "elType": "widget",
+                    "widgetType": "text-editor",
+                    "settings": { "editor": "{{item.column_text}}", "align": "center", "text_color": "{{heading_color}}" }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

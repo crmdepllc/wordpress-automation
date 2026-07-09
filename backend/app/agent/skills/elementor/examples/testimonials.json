@@ -2,29 +2,90 @@
   "meta": {
     "section_type": "testimonials",
     "layout": "grid",
-    "scalar_slots": [],
+    "scalar_slots": ["eyebrow", "heading", "subheading", "accent_color", "background_color", "heading_color"],
     "item_slots": ["quote", "author", "role"]
   },
   "template": {
     "id": "tst00000",
     "elType": "section",
-    "settings": { "layout": "boxed", "gap": "default" },
+    "settings": {
+      "layout": "full_width",
+      "background_background": "classic",
+      "background_color": "{{background_color}}",
+      "padding": { "unit": "px", "top": "80", "right": "20", "bottom": "80", "left": "20", "isLinked": false }
+    },
     "elements": [
       {
-        "id": "tstcol00",
+        "id": "tstoutr0",
         "elType": "column",
-        "settings": { "_column_size": 33, "_inline_size": null },
+        "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "tstwdg00",
+            "id": "tsteyb00",
             "elType": "widget",
-            "widgetType": "testimonial",
+            "widgetType": "heading",
+            "settings": { "title": "{{eyebrow}}", "header_size": "h6", "align": "center", "title_color": "{{accent_color}}" }
+          },
+          {
+            "id": "tsthdg00",
+            "elType": "widget",
+            "widgetType": "heading",
+            "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
+          },
+          {
+            "id": "tstsub00",
+            "elType": "widget",
+            "widgetType": "text-editor",
+            "settings": { "editor": "{{subheading}}", "align": "center", "text_color": "{{heading_color}}" }
+          },
+          {
+            "id": "tstgrd00",
+            "elType": "section",
             "settings": {
-              "testimonial_content": "{{item.quote}}",
-              "testimonial_name": "{{item.author}}",
-              "testimonial_job": "{{item.role}}",
-              "testimonial_alignment": "center"
-            }
+              "layout": "boxed",
+              "gap": "wide",
+              "margin": { "unit": "px", "top": "40", "right": "0", "bottom": "0", "left": "0", "isLinked": false }
+            },
+            "elements": [
+              {
+                "id": "tstcol00",
+                "elType": "column",
+                "settings": {
+                  "_column_size": 33,
+                  "_inline_size": null,
+                  "_padding": { "unit": "px", "top": "40", "right": "30", "bottom": "40", "left": "30", "isLinked": false },
+                  "_border_radius": { "unit": "px", "top": "12", "right": "12", "bottom": "12", "left": "12", "isLinked": true },
+                  "_box_shadow_box_shadow_type": "yes",
+                  "_box_shadow_box_shadow": { "horizontal": 0, "vertical": 8, "blur": 24, "spread": 0, "color": "rgba(0,0,0,0.08)" }
+                },
+                "elements": [
+                  {
+                    "id": "tstquot0",
+                    "elType": "widget",
+                    "widgetType": "icon",
+                    "settings": {
+                      "selected_icon": { "value": "fas fa-quote-right", "library": "fa-solid" },
+                      "align": "center",
+                      "primary_color": "{{accent_color}}"
+                    }
+                  },
+                  {
+                    "id": "tstwdg00",
+                    "elType": "widget",
+                    "widgetType": "testimonial",
+                    "settings": {
+                      "testimonial_content": "{{item.quote}}",
+                      "testimonial_name": "{{item.author}}",
+                      "testimonial_job": "{{item.role}}",
+                      "testimonial_alignment": "center",
+                      "content_content_color": "{{heading_color}}",
+                      "name_text_color": "{{heading_color}}",
+                      "job_text_color": "{{heading_color}}"
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }

@@ -2,42 +2,90 @@
   "meta": {
     "section_type": "pricing",
     "layout": "grid",
-    "scalar_slots": [],
+    "scalar_slots": ["eyebrow", "heading", "subheading", "accent_color", "background_color", "heading_color"],
     "item_slots": ["plan_name", "price", "tagline", "cta_text"]
   },
   "template": {
     "id": "prc0000",
     "elType": "section",
-    "settings": { "layout": "boxed", "gap": "default" },
+    "settings": {
+      "layout": "full_width",
+      "background_background": "classic",
+      "background_color": "{{background_color}}",
+      "padding": { "unit": "px", "top": "80", "right": "20", "bottom": "80", "left": "20", "isLinked": false }
+    },
     "elements": [
       {
-        "id": "prccol0",
+        "id": "prcoutr0",
         "elType": "column",
-        "settings": { "_column_size": 33, "_inline_size": null },
+        "settings": { "_column_size": 100, "_inline_size": null },
         "elements": [
           {
-            "id": "prcname",
+            "id": "prceyb00",
             "elType": "widget",
             "widgetType": "heading",
-            "settings": { "title": "{{item.plan_name}}", "header_size": "h3", "align": "center" }
+            "settings": { "title": "{{eyebrow}}", "header_size": "h6", "align": "center", "title_color": "{{accent_color}}" }
           },
           {
-            "id": "prcamt0",
+            "id": "prchdg00",
             "elType": "widget",
             "widgetType": "heading",
-            "settings": { "title": "{{item.price}}", "header_size": "h2", "align": "center" }
+            "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
           },
           {
-            "id": "prctag0",
+            "id": "prcsub00",
             "elType": "widget",
             "widgetType": "text-editor",
-            "settings": { "editor": "{{item.tagline}}", "align": "center" }
+            "settings": { "editor": "{{subheading}}", "align": "center", "text_color": "{{heading_color}}" }
           },
           {
-            "id": "prccta0",
-            "elType": "widget",
-            "widgetType": "button",
-            "settings": { "text": "{{item.cta_text}}", "align": "center", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+            "id": "prcgrd00",
+            "elType": "section",
+            "settings": {
+              "layout": "boxed",
+              "gap": "wide",
+              "margin": { "unit": "px", "top": "40", "right": "0", "bottom": "0", "left": "0", "isLinked": false }
+            },
+            "elements": [
+              {
+                "id": "prccol0",
+                "elType": "column",
+                "settings": {
+                  "_column_size": 33,
+                  "_inline_size": null,
+                  "_padding": { "unit": "px", "top": "40", "right": "30", "bottom": "40", "left": "30", "isLinked": false },
+                  "_border_radius": { "unit": "px", "top": "12", "right": "12", "bottom": "12", "left": "12", "isLinked": true },
+                  "_box_shadow_box_shadow_type": "yes",
+                  "_box_shadow_box_shadow": { "horizontal": 0, "vertical": 8, "blur": 24, "spread": 0, "color": "rgba(0,0,0,0.08)" }
+                },
+                "elements": [
+                  {
+                    "id": "prcname",
+                    "elType": "widget",
+                    "widgetType": "heading",
+                    "settings": { "title": "{{item.plan_name}}", "header_size": "h3", "align": "center" }
+                  },
+                  {
+                    "id": "prcamt0",
+                    "elType": "widget",
+                    "widgetType": "heading",
+                    "settings": { "title": "{{item.price}}", "header_size": "h2", "align": "center", "title_color": "{{accent_color}}" }
+                  },
+                  {
+                    "id": "prctag0",
+                    "elType": "widget",
+                    "widgetType": "text-editor",
+                    "settings": { "editor": "{{item.tagline}}", "align": "center" }
+                  },
+                  {
+                    "id": "prccta0",
+                    "elType": "widget",
+                    "widgetType": "button",
+                    "settings": { "text": "{{item.cta_text}}", "align": "center", "background_color": "{{accent_color}}", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
