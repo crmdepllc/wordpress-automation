@@ -12,6 +12,7 @@ import { useTaskStore } from "@/store/task-store";
 
 const SUGGESTIONS = [
   "Build a 3-page portfolio site for a photographer, dark minimal theme",
+  "Build a 5 page clean, modern website to help homeowners book reliable house cleaning services with clear service details, contact information, and a simple booking process",
   "Add a contact page with a form and set up SEO",
 ];
 

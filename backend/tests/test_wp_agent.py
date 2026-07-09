@@ -53,3 +53,17 @@ async def test_propose_no_tool_call_returns_none():
 async def test_run_approved_unknown_tool_raises():
     with pytest.raises(KeyError):
         await run_approved("not_a_tool", {})
+
+
+async def test_propose_fills_missing_brief_from_instruction():
+    # Regression: the model sometimes omits `brief` on brief-taking tools
+    # (e.g. it emits {"site_slug": "digi"} with no "brief" key), which used
+    # to blow up pydantic validation on the preview call and surface as an
+    # opaque "Planning failed: 1 validation error ..." to the user.
+    llm = FakeLLM([{"name": "wp_create_elementor_page", "args": {}}])
+    proposal = await WpAgent(llm=llm).propose(
+        "Build a landing page for a house cleaning service", "digi"
+    )
+    assert proposal is not None
+    assert proposal.args["brief"] == "Build a landing page for a house cleaning service"
+    assert proposal.preview["status"] == "needs_approval"

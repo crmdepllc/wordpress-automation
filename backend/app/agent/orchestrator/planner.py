@@ -123,8 +123,17 @@ def _title(tool: str, args: dict[str, Any]) -> str:
     return f"{label} {detail}".strip().capitalize()
 
 
-async def _to_step(index: int, name: str, raw_args: dict[str, Any], site_slug: str) -> PlannedStep:
+async def _to_step(
+    index: int, name: str, raw_args: dict[str, Any], site_slug: str, instruction: str
+) -> PlannedStep:
     args = {**raw_args, "site_slug": site_slug}
+    if "brief" not in args and "brief" in TOOLS_BY_NAME[name].args_schema.model_fields:
+        # The model occasionally omits `brief` on brief-taking tools (e.g.
+        # wp_create_elementor_page, wp_publish_post, wp_apply_theme) when the
+        # user's whole instruction already reads as the brief. Fall back to
+        # the raw instruction rather than failing pydantic validation and
+        # aborting the entire plan over one step.
+        args["brief"] = instruction
     requires = name in WRITE_TOOL_NAMES
     preview: dict[str, Any] | None = None
     if requires:
@@ -177,7 +186,7 @@ class LLMPlanner:
         tool_calls = getattr(response, "tool_calls", None) or []
         steps: list[PlannedStep] = []
         for i, call in enumerate(tool_calls):
-            steps.append(await _to_step(i, call["name"], call["args"], site_slug))
+            steps.append(await _to_step(i, call["name"], call["args"], site_slug, instruction))
         return _decompose(steps)
 
 

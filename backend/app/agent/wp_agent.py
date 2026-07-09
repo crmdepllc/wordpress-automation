@@ -80,6 +80,12 @@ class WpAgent:
 
         call = tool_calls[0]
         args = {**call["args"], "site_slug": site_slug}
+        if "brief" not in args and "brief" in TOOLS_BY_NAME[call["name"]].args_schema.model_fields:
+            # The model occasionally omits `brief` on brief-taking tools when
+            # the user's whole instruction already reads as the brief. Fall
+            # back to the raw instruction rather than failing pydantic
+            # validation on the preview call below.
+            args["brief"] = instruction
         requires = call["name"] in WRITE_TOOL_NAMES
 
         preview: dict[str, Any] | None = None

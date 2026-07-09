@@ -91,6 +91,21 @@ async def test_plan_ref_creates_explicit_dependency():
     assert seo_step.depends_on == ["step-1"]
 
 
+async def test_plan_fills_missing_brief_from_instruction():
+    # Regression: the model sometimes omits `brief` on brief-taking tools
+    # (e.g. it emits {"site_slug": "digi"} with no "brief" key), which used
+    # to blow up pydantic validation on the preview call and surface as an
+    # opaque "Planning failed: 1 validation error ..." to the user instead of
+    # a plan. Falling back to the raw instruction keeps the plan usable.
+    llm = FakeLLM([{"name": "wp_create_elementor_page", "args": {}}])
+    steps = await LLMPlanner(llm=llm).plan(
+        "Build a landing page for a house cleaning service", "digi"
+    )
+    assert len(steps) == 1
+    assert steps[0].args["brief"] == "Build a landing page for a house cleaning service"
+    assert steps[0].preview["status"] == "needs_approval"
+
+
 async def test_plan_menu_depends_on_pages_and_posts():
     llm = FakeLLM(
         [
