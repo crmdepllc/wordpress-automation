@@ -178,3 +178,38 @@ async def test_resolves_and_uploads_image_when_prompt_set(fake_creds, monkeypatc
     assert len(FakeWp.uploaded) == 1
     assert FakeWp.uploaded[0]["mime_type"] == "image/png"
     assert FakeWp.uploaded[0]["filename"].startswith("hero-")
+
+
+async def test_page_still_creates_when_image_generation_fails(fake_creds, monkeypatch):
+    """Real incident: a Gemini quota error must degrade to 'no image for this
+    section', not abort the whole page write — see progress-tracker.md."""
+    FakeWp.uploaded = None
+    spec = PageSpec(
+        title="Studio",
+        sections=[SectionSpec(type="hero", content={"image_prompt": "a bright modern studio"})],
+    )
+
+    async def fake_generate_page_spec(brief):
+        return spec
+
+    class BrokenImageGenerator:
+        async def generate(self, prompt: str) -> bytes:
+            raise Exception("429 RESOURCE_EXHAUSTED: quota exceeded")
+
+    monkeypatch.setattr(elementor_pkg, "generate_page_spec", fake_generate_page_spec)
+    monkeypatch.setattr(
+        images_resolver_mod, "build_image_generator", lambda: BrokenImageGenerator()
+    )
+    monkeypatch.setattr(
+        elementor_pkg,
+        "build_and_validate",
+        lambda s: [{"id": "s", "elType": "section", "elements": []}],
+    )
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", FakeWp)
+    monkeypatch.setattr(wp_tools, "WpCli", FakeCli)
+
+    result = await wp_tools.wp_create_elementor_page.ainvoke(
+        {"site_slug": "acme", "brief": "a design studio site", "approved": True}
+    )
+    assert result["status"] == "applied"  # page still gets created
+    assert FakeWp.uploaded is None  # upload was never reached

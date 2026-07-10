@@ -292,3 +292,27 @@ Warning: Trying to access array offset on value of type null in .../font-awesome
 - Did not kill the live backend process to force-trigger the new failure-branch message end-to-end (it's a shared dev process, not disposable this session) — instead verified the exact `err.message`/`err.cause.code` shape the new code branches on via an isolated `node -e` reproduction against a definitely-closed port, which matches exactly what the `catch` block now checks.
 
 **Status:** Resolved for this session (stack confirmed up, chat flow verified end-to-end). The recurring "Docker/backend not running after a restart" pattern itself remains environmental (see Issue 5's still-open suggestion (a): a Docker Desktop "start containers on boot" policy) — but the symptom is now a clear, actionable message instead of a fourth silent repeat of "fetch failed."
+
+---
+
+## Issue 12 — Task Log Panel: "Create elementor page — error: Gemini returned no image data for prompt: '...'"
+
+**Sprint:** Post-Sprint-8 fix pass (Gemini image generation, milestone 2 of 2 — see `progress-tracker.md`)
+
+**Symptom:** User-reported, seen in the dashboard's Task Log Panel after approving a real page-creation task with an image-worthy brief (a house-cleaning service page): the whole task failed with `Create elementor page — error: Gemini returned no image data for prompt: 'a bright, natural-light photo of a professional cleaner in a fresh uniform smiling in a spotless, sunlit modern living room, tidy cushions and gleaming surfaces'` — no page was written (the exception propagates out of `wp_create_elementor_page`'s try block before the REST write, so this failed closed, not silently).
+
+**Root cause — two separate problems found by reading `backend/.env` and calling the real Gemini API directly, not guessing:**
+1. **Real misconfiguration:** `GEMINI_IMAGE_MODEL` was set to `gemini-3.5-flash` — a text-only model with zero image-output capability. Any call to it for image generation returns text parts only, never `inline_data`, which is exactly `GeminiImageGenerator`'s `ImageGenerationError` path (`generator.py`, milestone 2). Listed the real models available to this API key (`client.models.list()`) and confirmed `gemini-2.5-flash-image` is a real, valid image-generation model on the account.
+2. **Account-level block, not a code bug:** even calling the correct model directly returned `429 RESOURCE_EXHAUSTED ... Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-2.5-flash-preview-image`. `limit: 0` means the free tier this API key is on has **zero** image-generation quota — not rate-limited, categorically unavailable until billing is enabled on the Google AI Studio/Cloud project. (Cross-checked the Gemini *text* model, `gemini-3.5-flash` — a `503 UNAVAILABLE` on first call turned out to be ordinary transient overload, not a quota issue; it succeeded on retry.)
+3. **Design gap surfaced by this incident:** even once billing is fixed, any future transient image failure (quota blip, safety filter, network error) would still fail the *entire* page write, discarding real generated copy/structure over one optional image. Confirmed with the user this should degrade gracefully instead.
+
+**Solution:**
+1. `backend/.env` — `GEMINI_IMAGE_MODEL` corrected to `gemini-2.5-flash-image`.
+2. `app/agent/skills/images/resolver.py` — `resolve_images` now wraps each section's generate+upload in `try/except Exception`: on failure, logs a warning (section type, prompt, full traceback) and leaves that section without an image (same state as a section whose `image_prompt` was never set — `builder.py`'s existing `_finalize_image_widgets` already drops that widget cleanly) instead of raising and aborting the whole page.
+3. Added regression coverage: `tests/test_images.py::test_resolve_images_degrades_gracefully_when_generation_fails`, `tests/test_elementor_tool.py::test_page_still_creates_when_image_generation_fails` (real `resolve_images`, a generator that raises, asserts the page still gets created), and a new eval scenario in `app/evals/scenarios/images.py` (`image generation failure degrades gracefully`) — 3 images scenarios now, 28 total across 7 skills.
+
+**Not fixed (external action required from the user):** enabling billing on the Google AI Studio/Cloud project tied to `GEMINI_API_KEY` — no code change can grant image-generation quota on a free-tier key. Once billing is enabled, the corrected model name should work immediately (page copy/structure already worked throughout, since that's Claude + a separate, unaffected Gemini text call).
+
+**Verified:** `pytest -m "not integration"` — 126 passed (same one pre-existing, unrelated `test_local_docker_executor_command` failure). `scripts/run_evals.py` — all 7 skills 100/100 including the new images scenario, no regressions. Did not verify the graceful-degradation path against the *real* Gemini API (would require deliberately waiting out the quota window or a second, correctly-quota'd key) — verified via fakes that raise, which exercise the exact `except Exception` branch the real quota error hits.
+
+**Status:** Resolved (code-side). Billing/quota is a pending external action for the user.

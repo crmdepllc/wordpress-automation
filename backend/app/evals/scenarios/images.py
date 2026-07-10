@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.agent.skills.elementor.schema import PageSpec, SectionSpec
+from app.agent.skills.images.generator import ImageGenerationError
 from app.agent.skills.images.resolver import resolve_images
 from app.evals.scoring import CheckResult, Scenario
 from app.wp.schemas import MediaItem
@@ -70,7 +71,35 @@ async def _run_noop_when_no_prompt() -> list[CheckResult]:
     ]
 
 
+class _FailingImageGenerator:
+    async def generate(self, prompt: str) -> bytes:
+        raise ImageGenerationError(f"quota exceeded for prompt: {prompt!r}")
+
+
+async def _run_degrades_gracefully_on_failure() -> list[CheckResult]:
+    """A failed image call (quota, API error, ...) must not fail the whole
+    page — real incident, see progress-tracker.md's Gemini image entry."""
+    spec = PageSpec(
+        title="X",
+        sections=[
+            SectionSpec(type="hero", content={"heading": "Hi", "image_prompt": "a sunrise"}),
+            SectionSpec(type="features", content={"heading": "What we do"}),
+        ],
+    )
+    wp = _FakeWp()
+    result = await resolve_images(spec, wp, image_generator=_FailingImageGenerator())
+    hero, features = result.sections
+
+    return [
+        CheckResult("does_not_raise", True, weight=2),  # reaching here means it didn't
+        CheckResult("prompt_dropped_no_image_fields", hero.content == {"heading": "Hi"}, weight=2),
+        CheckResult("other_section_untouched", features.content == {"heading": "What we do"}, weight=1),
+        CheckResult("no_upload_attempted", wp.uploads == [], weight=1),
+    ]
+
+
 SCENARIOS = [
     Scenario(name="hero image_prompt resolves and uploads", run=_run_resolves_requested_image),
     Scenario(name="no image_prompt is a no-op", run=_run_noop_when_no_prompt),
+    Scenario(name="image generation failure degrades gracefully", run=_run_degrades_gracefully_on_failure),
 ]

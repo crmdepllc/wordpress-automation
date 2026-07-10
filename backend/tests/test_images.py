@@ -126,3 +126,28 @@ async def test_resolve_images_is_a_noop_when_no_section_has_a_prompt():
 
     assert result.sections[0].content == {"heading": "Hi"}
     assert wp.uploads == []
+
+
+class _FailingImageGenerator:
+    async def generate(self, prompt: str) -> bytes:
+        raise ImageGenerationError(f"quota exceeded for prompt: {prompt!r}")
+
+
+async def test_resolve_images_degrades_gracefully_when_generation_fails():
+    """A failed image (quota, API error, etc.) must not fail the whole page —
+    the section just ends up with no image, same as if no prompt was set."""
+    spec = PageSpec(
+        title="X",
+        sections=[
+            SectionSpec(type="hero", content={"heading": "Hi", "image_prompt": "a sunrise"}),
+            SectionSpec(type="features", content={"heading": "What we do"}),
+        ],
+    )
+    wp = _FakeWp()
+
+    result = await resolve_images(spec, wp, image_generator=_FailingImageGenerator())
+
+    hero, features = result.sections
+    assert hero.content == {"heading": "Hi"}  # prompt dropped, no image_url/image_id
+    assert features.content == {"heading": "What we do"}
+    assert wp.uploads == []  # never reached the upload step
