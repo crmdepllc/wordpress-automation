@@ -74,7 +74,19 @@ export async function POST(req: Request) {
       errorDetail = data.detail ?? `Backend error (${res.status})`;
     }
   } catch (err) {
-    errorDetail = err instanceof Error ? err.message : "Backend unreachable";
+    if (err instanceof Error) {
+      // Node's fetch (undici) always reports connection-level failures as
+      // the opaque "fetch failed" — the useful signal (e.g. ECONNREFUSED)
+      // lives on err.cause instead. Surface that so "backend not running"
+      // reads as an actionable message, not a dead end.
+      const cause = (err as Error & { cause?: { code?: string } }).cause;
+      errorDetail =
+        err.message === "fetch failed"
+          ? `Backend unreachable at ${BACKEND_URL}${cause?.code ? ` (${cause.code})` : ""} — is the FastAPI server and Docker stack running?`
+          : err.message;
+    } else {
+      errorDetail = "Backend unreachable";
+    }
   }
 
   const stream = createUIMessageStream<ChatUIMessage>({

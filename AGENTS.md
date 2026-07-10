@@ -61,6 +61,18 @@ Full rationale for each tool lives in `project-overview.md` — don't re-litigat
 - **Theme file edits (`functions.php`, custom widgets)** → Fabric/Paramiko file operations only.
 - Don't mix these — e.g. don't shell out to WP-CLI for something the REST API already handles cleanly, and don't write `_elementor_data` by SSH-editing the database directly.
 - After any Elementor layout write, trigger a CSS regeneration. A write that skips this step is incomplete even if the API call succeeded.
+- **Page builder plugin stack is Elementor + Royal Addons for Elementor (WP Royal) + ElementsKit Elementor Addons – Advanced (Roxnor), every time.** Every site build must install and activate all three (via WP-CLI over SSH, per the layer rule above) before generating Elementor layouts — don't ship a page relying on core Elementor widgets alone when a Royal Addons / ElementsKit widget better fits the design.
+
+## Page planning (before building)
+
+- Before generating any page, plan it first: what kind of site/page this is, its purpose, and how many sections it needs and in what order. Do not jump straight to Elementor JSON generation without this plan.
+- Output should be professional, production-level UI — not a placeholder or low-effort layout. Validate section structure against the Elementor examples library (`agent/skills/elementor/examples/`) as usual before writing JSON.
+
+## Model usage for page generation
+
+- **Images and written content for a page** → Gemini, not Claude.
+- **Page generation/development itself** (planning structure, producing Elementor JSON, orchestration) → Claude.
+- Claude is the builder; Gemini is the content/image source it builds with. Don't use Claude to generate page copy or images, and don't use Gemini to generate or mutate `_elementor_data`.
 
 ## Testing
 

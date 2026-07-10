@@ -270,3 +270,25 @@ Warning: Trying to access array offset on value of type null in .../font-awesome
 **Verified:** `backend/tests`: 122 passed, 4 skipped (targeted `test_planner.py`/`test_wp_agent.py` run first — 11 passed — then full suite; same one pre-existing, unrelated `test_local_docker_executor_command` Docker-environment failure noted in Issues 4/7/9 reproduces on `main`, unaffected by this change).
 
 **Status:** Resolved.
+
+---
+
+## Issue 11 — Dashboard chat shows "I couldn't plan that: fetch failed" (recurrence of Issue 5) — this time actually fixing the deferred follow-up
+
+**Sprint:** Sprint 2/4 — Dashboard chat UI + orchestration graph (same code path as Issue 5)
+
+**Symptom:** Same as Issue 5 — the dashboard chat panel returned `I couldn't plan that: fetch failed` instead of a plan.
+
+**Root cause — same category as Issue 5, confirmed environmentally, not a new code bug:** checked container state (`docker ps`) and found `postgres`/`redis` had only been up ~1 minute — i.e. the app-data stack wasn't running when the user hit "send." The FastAPI backend process (`uv run main.py`, run locally per Issues 1/3/5's established pattern, not via Compose) was also not reachable at that moment (`curl http://localhost:8000/health` failed to connect). This is the fourth+ occurrence of "Docker/backend not running after a restart" in this log (Issues 1, 3, 4, 5) — `err.message` for a Node `fetch()` connection failure is *always* the literal, opaque string `"fetch failed"` (confirmed directly: `err.cause` is an `AggregateError` with `.code: "ECONNREFUSED"`, but `err.cause.message` is empty), which is why every occurrence of this root cause produces byte-for-byte the same unhelpful frontend message regardless of what's actually down.
+
+**Solution:**
+1. **Immediate unblock:** confirmed `postgres`/`redis`/`wp-db`/`wordpress`/`wpcli` were up via Docker Compose (brought up earlier in this session for an unrelated live-verification task) and that a backend process was listening on port 8000 and healthy (`GET /health` → `200`). Reproduced the *actual* user-facing flow end-to-end — `POST http://localhost:3000/api/chat` through the real Next.js proxy — and confirmed it now streams back a real plan (`"I've planned 1 step(s)..."` plus a real `data-plan` payload from a live Claude call), not "fetch failed."
+2. **Implemented Issue 5's deferred follow-up (b), since this is now a confirmed recurrence of the identical symptom:** `frontend/src/app/api/chat/route.ts`'s `catch` block now distinguishes a connection-level failure from any other thrown error. When `err.message === "fetch failed"` (Node/undici's fixed string for every connection failure), it now reads the real reason off `err.cause.code` (e.g. `ECONNREFUSED`) and returns `` `Backend unreachable at ${BACKEND_URL} (ECONNREFUSED) — is the FastAPI server and Docker stack running?` `` instead of the opaque original. Verified the exact error shape first with a standalone `node -e` script hitting a closed port, rather than assuming undici's error format.
+3. Did not touch the backend-side generic-`except Exception` pattern (Issues 1/10's still-open follow-up) — that's a different code path (a reachable backend returning a bad response), not this issue (backend unreachable at the network level).
+
+**Verified:**
+- `npx tsc --noEmit` in `frontend/` — clean.
+- Re-ran the real `POST http://localhost:3000/api/chat` flow after the change (Next.js dev server hot-reloads route handlers) — happy path still streams a plan correctly, confirming the fix didn't disturb the success branch.
+- Did not kill the live backend process to force-trigger the new failure-branch message end-to-end (it's a shared dev process, not disposable this session) — instead verified the exact `err.message`/`err.cause.code` shape the new code branches on via an isolated `node -e` reproduction against a definitely-closed port, which matches exactly what the `catch` block now checks.
+
+**Status:** Resolved for this session (stack confirmed up, chat flow verified end-to-end). The recurring "Docker/backend not running after a restart" pattern itself remains environmental (see Issue 5's still-open suggestion (a): a Docker Desktop "start containers on boot" policy) — but the symptom is now a clear, actionable message instead of a fourth silent repeat of "fetch failed."

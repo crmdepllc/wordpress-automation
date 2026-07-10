@@ -212,37 +212,46 @@ async def wp_create_elementor_page(
 ) -> dict[str, Any]:
     """Generate an Elementor landing page from a plain-language brief and publish it.
 
-    Generates a validated layout, writes it via REST, then regenerates Elementor
-    CSS. WRITE — requires approved=True.
+    Generates a validated layout (resolving any requested image via Gemini +
+    a WP media upload), writes it via REST, then regenerates Elementor CSS.
+    WRITE — requires approved=True.
     """
     if not approved:
         return _needs_approval("create Elementor page", {"site": site_slug, "brief": brief})
 
-    # Import here so the tools module doesn't pull the skill (and its model deps)
-    # unless this tool actually runs.
-    from app.agent.skills.elementor import ElementorValidationError, generate_elementor_page
-
-    try:
-        page_spec = await generate_elementor_page(brief)
-    except ElementorValidationError as exc:
-        # Never write invalid Elementor data.
-        return {"status": "error", "stage": "validation", "errors": exc.errors}
+    # Import here so the tools module doesn't pull the skills (and their model
+    # deps) unless this tool actually runs.
+    from app.agent.skills.elementor import (
+        ElementorValidationError,
+        build_and_validate,
+        generate_page_spec,
+    )
+    from app.agent.skills.images import resolve_images
 
     creds = await _credentials(site_slug)
     async with WordPressRestClient.from_credentials(creds) as wp:
-        page = await wp.create_elementor_page(
-            page_spec["title"], page_spec["elementor_data"], status=status
-        )
+        try:
+            spec = await generate_page_spec(brief)
+            # Image generation + upload are real WP writes, so per AGENTS.md
+            # rule 1 this only runs here, post-approval — never during planning.
+            spec = await resolve_images(spec, wp)
+            elementor_data = build_and_validate(spec)
+        except ElementorValidationError as exc:
+            # Never write invalid Elementor data.
+            return {"status": "error", "stage": "validation", "errors": exc.errors}
+
+        page = await wp.create_elementor_page(spec.title, elementor_data, status=status)
     # A layout write is incomplete until CSS is regenerated (integration rule).
     flush = await WpCli.from_credentials(creds).flush_css()
+    sections = [s.type for s in spec.sections]
     logger.info(
         "wp_create_elementor_page(%s) -> page=%s sections=%s flushed=%s",
-        site_slug, page.id, page_spec["sections"], flush.ok,
+        site_slug, page.id, sections, flush.ok,
     )
     return {
         "status": "applied",
         "page": page.model_dump(),
-        "sections": page_spec["sections"],
+        "sections": sections,
         "css_flushed": flush.ok,
     }
 

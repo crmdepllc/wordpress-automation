@@ -2,7 +2,7 @@
   "meta": {
     "section_type": "about",
     "layout": "single",
-    "scalar_slots": ["eyebrow", "heading", "text", "cta_text", "accent_color", "background_color", "heading_color"],
+    "scalar_slots": ["eyebrow", "heading", "text", "cta_text", "accent_color", "background_color", "heading_color", "image_prompt"],
     "item_slots": []
   },
   "template": {
@@ -39,6 +39,12 @@
             "elType": "widget",
             "widgetType": "heading",
             "settings": { "title": "{{heading}}", "header_size": "h2", "align": "center", "title_color": "{{heading_color}}" }
+          },
+          {
+            "id": "abtimg00",
+            "elType": "widget",
+            "widgetType": "image",
+            "settings": { "image": { "url": "{{image_url}}", "id": "{{image_id}}" }, "image_size": "medium_large", "align": "center" }
           },
           {
             "id": "abttxt00",

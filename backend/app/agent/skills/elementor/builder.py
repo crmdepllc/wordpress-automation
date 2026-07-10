@@ -54,9 +54,34 @@ def _fill_tokens(value: Any, mapping: dict[str, str], *, blank_unmatched: bool =
     return value
 
 
+def _finalize_image_widgets(node: dict[str, Any]) -> dict[str, Any] | None:
+    """Drop an ``image`` widget left with an empty url after token-fill (the
+    page's ``image_prompt`` was never set, so ``images/resolver.py`` never
+    ran for this section — an unset image is optional, not an error), and
+    coerce a filled attachment id to an int (token-fill always produces
+    strings; Elementor's image control expects a real int id). Returns
+    ``None`` if this node itself should be dropped from its parent."""
+    if node.get("widgetType") == "image":
+        image = node.get("settings", {}).get("image", {})
+        if not image.get("url"):
+            return None
+        if image.get("id"):
+            try:
+                image["id"] = int(image["id"])
+            except (TypeError, ValueError):
+                image["id"] = 0
+    children = node.get("elements")
+    if children:
+        node["elements"] = [
+            kept for child in children if (kept := _finalize_image_widgets(child)) is not None
+        ]
+    return node
+
+
 def _build_single(tmpl: SectionTemplate, section: SectionSpec) -> dict[str, Any]:
     node = copy.deepcopy(tmpl.template)
-    return _fill_tokens(node, section.content)
+    node = _fill_tokens(node, section.content)
+    return _finalize_image_widgets(node)
 
 
 def _inner_grid_section(node: dict[str, Any]) -> dict[str, Any]:

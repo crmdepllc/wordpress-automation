@@ -51,6 +51,19 @@ Slots named `icon` expect an Elementor icon-picker value:
 `eyebrow` is a short overline label rendered above a section's main heading
 (e.g. "WHY CHOOSE US"), styled in `accent_color` — distinct from `heading`.
 
+A slot named `image_prompt` (currently only on `hero.json`/`about.json`) is
+optional and, unlike every other content slot, is never shown on the page —
+Claude may set it as a structural decision (does this section want an image,
+roughly what should it depict), and `app/agent/skills/images/resolver.py`
+turns it into a real image: generated via Gemini, uploaded to the WP media
+library, replacing `image_prompt` with `image_url`/`image_id` before the
+template's `{{image_url}}`/`{{image_id}}` tokens get filled. This only
+happens inside the gated `wp_create_elementor_page` tool, post-approval — the
+offline `generate_elementor_page` pipeline (used by tests/evals) never
+resolves it, so an unfilled `image_prompt` always builds without an image:
+`builder.py`'s `_finalize_image_widgets` drops any `image` widget left with
+an empty url rather than shipping a broken image box.
+
 The builder regenerates every element `id` on build, so the ids here are
 placeholders.
 
@@ -85,3 +98,14 @@ placeholders.
 > added: `about` (single-column bio block, no photo) and `badges` (a small
 > icon-circle trust-badge row) — both style-only substitutes for the
 > photo/logo-based versions a real design would use.
+
+> ✅ **Image widget (Gemini image generation, `hero.json`/`about.json`):
+> live-verified.** The `image` widget settings shape
+> (`{"image": {"url", "id"}, "image_size", "align"}`) was built via
+> `build_and_validate` → REST write → live fetch against a real WordPress +
+> Elementor sandbox (both sections in the same page): both widgets rendered
+> with the correct `wp-image-<id>` class and the right size variant
+> (`size-large` on `hero`, `size-medium_large` on `about`), no PHP
+> warnings/errors introduced, and the string attachment id round-tripped
+> correctly through `builder.py`'s int coercion. See `progress-tracker.md`'s
+> "Gemini image generation" entry.

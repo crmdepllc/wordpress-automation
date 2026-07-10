@@ -21,6 +21,14 @@ class _FakeGenerator:
         return self._spec
 
 
+class _PassthroughCopyGenerator:
+    """Stand-in for the Gemini copy pass: the golden specs below already carry
+    their final copy, so this just returns the skeleton unchanged."""
+
+    async def fill(self, brief: str, skeleton: PageSpec) -> PageSpec:
+        return skeleton
+
+
 _BRIEFS: dict[str, PageSpec] = {
     "photographer portfolio, dark minimal": PageSpec(
         title="Lens & Light",
@@ -135,7 +143,9 @@ def _accent_color_consistent(spec: PageSpec) -> bool:
 
 
 async def _run(brief: str, spec: PageSpec) -> list[CheckResult]:
-    result = await generate_elementor_page(brief, generator=_FakeGenerator(spec))
+    result = await generate_elementor_page(
+        brief, generator=_FakeGenerator(spec), copy_generator=_PassthroughCopyGenerator()
+    )
     errors = validate_elementor_data(result["elementor_data"])
     section_count_ok = 3 <= len(result["sections"]) <= 6
     sections_match = result["sections"] == [s.type for s in spec.sections]
@@ -161,3 +171,81 @@ SCENARIOS = [
     Scenario(name=brief, run=lambda b=brief, s=spec: _run(b, s))
     for brief, spec in _BRIEFS.items()
 ]
+
+
+# --- Two-pass split (Claude structure -> Gemini copy) --------------------
+
+
+class _FakeSkeletonGenerator:
+    """Stands in for Claude: returns structure/design slots, no visible text —
+    exercising the real ``generate_elementor_page`` split, not a passthrough."""
+
+    async def generate(self, brief: str) -> PageSpec:
+        return PageSpec(
+            title="Acme Studio",
+            sections=[
+                SectionSpec(type="hero", content={"accent_color": "#2d6cdf"}),
+                SectionSpec(
+                    type="features",
+                    content={"accent_color": "#2d6cdf"},
+                    items=[
+                        {"icon": "fas fa-bolt"},
+                        {"icon": "fas fa-camera"},
+                    ],
+                ),
+            ],
+        )
+
+
+class _FakeCopyGenerator:
+    """Stands in for Gemini: fills only the text slots, leaving whatever
+    design slots it was given untouched — mirroring the real prompt contract."""
+
+    async def fill(self, brief: str, skeleton: PageSpec) -> PageSpec:
+        sections = []
+        for s in skeleton.sections:
+            if s.type == "hero":
+                content = {**s.content, "heading": "Acme Studio", "subheading": "Design that ships", "cta_text": "Get started"}
+                sections.append(s.model_copy(update={"content": content}))
+            elif s.type == "features":
+                content = {**s.content, "heading": "What we do"}
+                items = [
+                    {**s.items[0], "title": "Speed", "text": "Ship faster than ever"},
+                    {**s.items[1], "title": "Craft", "text": "Every detail considered"},
+                ]
+                sections.append(s.model_copy(update={"content": content, "items": items}))
+            else:
+                sections.append(s)
+        return skeleton.model_copy(update={"sections": sections})
+
+
+async def _run_two_pass_split() -> list[CheckResult]:
+    result = await generate_elementor_page(
+        "a design studio site",
+        generator=_FakeSkeletonGenerator(),
+        copy_generator=_FakeCopyGenerator(),
+    )
+    errors = validate_elementor_data(result["elementor_data"])
+    text_slots_filled = "Acme Studio" in str(result["elementor_data"]) and "Speed" in str(
+        result["elementor_data"]
+    )
+    accent_preserved = _accent_color_applied(
+        result["elementor_data"],
+        PageSpec(
+            title="Acme Studio",
+            sections=[
+                SectionSpec(type="hero", content={"accent_color": "#2d6cdf"}),
+                SectionSpec(type="features", content={"accent_color": "#2d6cdf"}),
+            ],
+        ),
+    )
+    return [
+        CheckResult("valid_elementor_data", not errors, weight=2, detail="; ".join(errors)),
+        CheckResult("copy_pass_filled_text_slots", text_slots_filled, weight=2),
+        CheckResult(
+            "structural_pass_design_slots_survive_copy_pass", accent_preserved, weight=2
+        ),
+    ]
+
+
+SCENARIOS.append(Scenario(name="two-pass split: structure vs copy", run=_run_two_pass_split))

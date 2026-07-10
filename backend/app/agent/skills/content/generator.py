@@ -1,12 +1,16 @@
-"""Generate a ``PostDraft`` from a brief (Claude, lazy model)."""
+"""Generate a ``PostDraft`` from a brief (Gemini, lazy model).
+
+Per AGENTS.md, Gemini writes all visible copy; Claude is reserved for page
+structure/development (see ``elementor/generator.py``).
+"""
 
 from __future__ import annotations
 
 from typing import Any, Protocol
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.agent.skills.content.schema import PostDraft
 from app.config import get_settings
@@ -31,9 +35,9 @@ class LLMContentGenerator:
     def _model(self) -> Any:
         if self._structured is None:
             settings = get_settings()
-            base = self._provided or ChatAnthropic(
-                model=settings.orchestrator_model,
-                api_key=settings.anthropic_api_key,
+            base = self._provided or ChatGoogleGenerativeAI(
+                model=settings.gemini_content_model,
+                api_key=settings.gemini_api_key,
                 max_tokens=2048,
             )
             self._structured = base.with_structured_output(PostDraft)

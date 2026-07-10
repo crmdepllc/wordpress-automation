@@ -2,7 +2,7 @@
   "meta": {
     "section_type": "hero",
     "layout": "single",
-    "scalar_slots": ["eyebrow", "heading", "subheading", "cta_text", "background_color", "heading_color", "accent_color"],
+    "scalar_slots": ["eyebrow", "heading", "subheading", "cta_text", "background_color", "heading_color", "accent_color", "image_prompt"],
     "item_slots": []
   },
   "template": {
@@ -44,6 +44,12 @@
             "elType": "widget",
             "widgetType": "button",
             "settings": { "text": "{{cta_text}}", "align": "center", "size": "lg", "background_color": "{{accent_color}}", "link": { "url": "#", "is_external": "", "nofollow": "" } }
+          },
+          {
+            "id": "heroimg0",
+            "elType": "widget",
+            "widgetType": "image",
+            "settings": { "image": { "url": "{{image_url}}", "id": "{{image_id}}" }, "image_size": "large", "align": "center" }
           }
         ]
       }

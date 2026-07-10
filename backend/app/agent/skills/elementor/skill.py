@@ -1,8 +1,8 @@
 """The Elementor page-generation pipeline: brief → validated ``_elementor_data``.
 
-Ties the pieces together (generate IR → build JSON → validate) but does NOT
-write to any site — the write + flush-css live in the ``wp_create_elementor_page``
-tool so they pass through the approval gate.
+Ties the pieces together (Claude structure → Gemini copy → build JSON →
+validate) but does NOT write to any site — the write + flush-css live in the
+``wp_create_elementor_page`` tool so they pass through the approval gate.
 """
 
 from __future__ import annotations
@@ -10,7 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.agent.skills.elementor.builder import build_page
-from app.agent.skills.elementor.generator import Generator, build_generator
+from app.agent.skills.elementor.generator import (
+    CopyGenerator,
+    Generator,
+    build_copy_generator,
+    build_generator,
+)
 from app.agent.skills.elementor.icons import safe_icon
 from app.agent.skills.elementor.library import load_library
 from app.agent.skills.elementor.schema import PageSpec
@@ -65,16 +70,42 @@ def build_and_validate(spec: PageSpec) -> list[dict[str, Any]]:
     return data
 
 
-async def generate_elementor_page(
-    brief: str, *, generator: Generator | None = None
-) -> dict[str, Any]:
-    """Brief → {title, elementor_data, sections}. Raises on invalid output."""
-    spec = await (generator or build_generator()).generate(brief)
+async def generate_page_spec(
+    brief: str,
+    *,
+    generator: Generator | None = None,
+    copy_generator: CopyGenerator | None = None,
+) -> PageSpec:
+    """Brief → a filled ``PageSpec`` (structure + copy, no image resolution yet).
+
+    Two-pass generation per AGENTS.md: ``generator`` (Claude) decides page
+    structure/design; ``copy_generator`` (Gemini) then fills the visible text.
+    Any ``image_prompt`` design slot Claude set is left as-is — turning it into
+    a real image is a separate, WP-writing step (``images/resolver.py``) that
+    only runs post-approval, not part of this offline pipeline.
+    """
+    skeleton = await (generator or build_generator()).generate(brief)
     # Keep only sections we have templates for; report what was actually built.
     known = set(load_library())
-    spec = spec.model_copy(
-        update={"sections": [s for s in spec.sections if s.type in known]}
+    skeleton = skeleton.model_copy(
+        update={"sections": [s for s in skeleton.sections if s.type in known]}
     )
+    return await (copy_generator or build_copy_generator()).fill(brief, skeleton)
+
+
+async def generate_elementor_page(
+    brief: str,
+    *,
+    generator: Generator | None = None,
+    copy_generator: CopyGenerator | None = None,
+) -> dict[str, Any]:
+    """Brief → {title, elementor_data, sections}. Raises on invalid output.
+
+    Convenience wrapper for callers that don't need image resolution (tests,
+    offline evals): any unresolved ``image_prompt`` slot simply builds without
+    an image, since its ``{{image_url}}`` token never gets filled.
+    """
+    spec = await generate_page_spec(brief, generator=generator, copy_generator=copy_generator)
     data = build_and_validate(spec)
     return {
         "title": spec.title,

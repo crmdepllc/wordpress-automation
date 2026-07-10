@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     fast_model: str = "claude-haiku-4-5-20251001"
     max_tokens: int = 1024
 
+    # --- Gemini ---------------------------------------------------------
+    # Per AGENTS.md: Gemini writes page/blog copy and generates images;
+    # Claude stays the sole author of page structure and _elementor_data.
+    # Left empty by default so the app can still boot without a key.
+    gemini_api_key: str = ""
+    gemini_content_model: str = "gemini-2.5-flash"
+    gemini_image_model: str = "gemini-2.5-flash-image"
+
     # --- Data services (used by later sprints; defined now for compose) ----
     database_url: str = "postgresql+asyncpg://wpa:wpa@postgres:5432/wpa"
     redis_url: str = "redis://redis:6379/0"

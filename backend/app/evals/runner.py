@@ -16,11 +16,20 @@ async def run_skill(skill: str, scenarios: list[Scenario]) -> SkillReport:
 async def run_all() -> list[SkillReport]:
     # Imported lazily so importing the runner doesn't require every skill's
     # (LLM/WP-CLI) dependencies to be importable in every context.
-    from app.evals.scenarios import content, elementor, orchestrator, plugins, seo, theme
+    from app.evals.scenarios import (
+        content,
+        elementor,
+        images,
+        orchestrator,
+        plugins,
+        seo,
+        theme,
+    )
 
     skills: list[tuple[str, list[Scenario]]] = [
         ("elementor", elementor.SCENARIOS),
         ("content", content.SCENARIOS),
+        ("images", images.SCENARIOS),
         ("seo", seo.SCENARIOS),
         ("theme", theme.SCENARIOS),
         ("plugins", plugins.SCENARIOS),
