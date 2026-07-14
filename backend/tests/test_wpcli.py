@@ -64,6 +64,34 @@ async def test_wpcli_builds_install_args():
     assert rec.calls[2] == ["elementor", "flush-css"]
 
 
+async def test_wpcli_builds_plugin_status_args():
+    rec = RecordingExecutor()
+    cli = WpCli(rec)
+    await cli.plugin_is_installed("elementor")
+    await cli.plugin_is_active("elementor")
+    assert rec.calls[0] == ["plugin", "is-installed", "elementor"]
+    assert rec.calls[1] == ["plugin", "is-active", "elementor"]
+
+
+async def test_wpcli_builds_theme_args():
+    rec = RecordingExecutor()
+    cli = WpCli(rec)
+    await cli.theme_is_installed("astra")
+    await cli.theme_is_active("astra")
+    await cli.install_theme("astra", activate=True)
+    await cli.activate_theme("astra")
+    assert rec.calls[0] == ["theme", "is-installed", "astra"]
+    assert rec.calls[1] == ["theme", "is-active", "astra"]
+    assert rec.calls[2] == ["theme", "install", "astra", "--activate"]
+    assert rec.calls[3] == ["theme", "activate", "astra"]
+
+
+async def test_wpcli_install_theme_without_activate():
+    rec = RecordingExecutor()
+    await WpCli(rec).install_theme("astra", activate=False)
+    assert rec.calls[0] == ["theme", "install", "astra"]
+
+
 async def test_wpcli_export_db_builds_args():
     rec = RecordingExecutor()
     result = await WpCli(rec).export_db("snapshot-acme-20260709.sql")

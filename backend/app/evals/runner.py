@@ -23,6 +23,7 @@ async def run_all() -> list[SkillReport]:
         orchestrator,
         plugins,
         seo,
+        stack,
         theme,
     )
 
@@ -30,6 +31,7 @@ async def run_all() -> list[SkillReport]:
         ("elementor", elementor.SCENARIOS),
         ("content", content.SCENARIOS),
         ("images", images.SCENARIOS),
+        ("stack", stack.SCENARIOS),
         ("seo", seo.SCENARIOS),
         ("theme", theme.SCENARIOS),
         ("plugins", plugins.SCENARIOS),

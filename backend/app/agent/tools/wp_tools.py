@@ -212,9 +212,10 @@ async def wp_create_elementor_page(
 ) -> dict[str, Any]:
     """Generate an Elementor landing page from a plain-language brief and publish it.
 
-    Generates a validated layout (resolving any requested image via Gemini +
-    a WP media upload), writes it via REST, then regenerates Elementor CSS.
-    WRITE — requires approved=True.
+    Ensures the required theme/plugin stack (Astra + Elementor + Royal Addons
+    + ElementsKit) is installed and active, generates a validated layout
+    (resolving any requested image via Gemini + a WP media upload), writes it
+    via REST, then regenerates Elementor CSS. WRITE — requires approved=True.
     """
     if not approved:
         return _needs_approval("create Elementor page", {"site": site_slug, "brief": brief})
@@ -227,8 +228,18 @@ async def wp_create_elementor_page(
         generate_page_spec,
     )
     from app.agent.skills.images import resolve_images
+    from app.agent.skills.stack import RequiredStackError, ensure_required_stack
 
     creds = await _credentials(site_slug)
+    cli = WpCli.from_credentials(creds)
+
+    try:
+        # Elementor is a hard dependency (aborts on failure); Astra/Royal
+        # Addons/ElementsKit are best-effort (logged, page creation proceeds).
+        stack_result = await ensure_required_stack(cli)
+    except RequiredStackError as exc:
+        return {"status": "error", "stage": "stack_check", "errors": exc.errors}
+
     async with WordPressRestClient.from_credentials(creds) as wp:
         try:
             spec = await generate_page_spec(brief)
@@ -242,17 +253,22 @@ async def wp_create_elementor_page(
 
         page = await wp.create_elementor_page(spec.title, elementor_data, status=status)
     # A layout write is incomplete until CSS is regenerated (integration rule).
-    flush = await WpCli.from_credentials(creds).flush_css()
+    flush = await cli.flush_css()
     sections = [s.type for s in spec.sections]
     logger.info(
-        "wp_create_elementor_page(%s) -> page=%s sections=%s flushed=%s",
+        "wp_create_elementor_page(%s) -> page=%s sections=%s flushed=%s stack=%s",
         site_slug, page.id, sections, flush.ok,
+        [(i.name, i.status) for i in stack_result.items],
     )
     return {
         "status": "applied",
         "page": page.model_dump(),
         "sections": sections,
         "css_flushed": flush.ok,
+        "stack_check": [
+            {"name": i.name, "kind": i.kind, "status": i.status, "detail": i.detail}
+            for i in stack_result.items
+        ],
     }
 
 

@@ -52,12 +52,40 @@ class FakeWp:
 
 
 class FakeCli:
+    """Defaults to "everything already active" so tests that don't care about
+    the stack check aren't forced to mock it — override per-test via subclass
+    or monkeypatch when a test needs a different stack state."""
+
     @classmethod
     def from_credentials(cls, creds):
         return cls()
 
     async def flush_css(self):
         return CliResult(command="elementor flush-css", exit_code=0, stdout="ok")
+
+    async def plugin_is_active(self, slug):
+        return CliResult(command=f"plugin is-active {slug}", exit_code=0)
+
+    async def plugin_is_installed(self, slug):
+        return CliResult(command=f"plugin is-installed {slug}", exit_code=0)
+
+    async def activate_plugin(self, slug):
+        return CliResult(command=f"plugin activate {slug}", exit_code=0)
+
+    async def install_plugin(self, slug, *, activate=True):
+        return CliResult(command=f"plugin install {slug}", exit_code=0)
+
+    async def theme_is_active(self, slug):
+        return CliResult(command=f"theme is-active {slug}", exit_code=0)
+
+    async def theme_is_installed(self, slug):
+        return CliResult(command=f"theme is-installed {slug}", exit_code=0)
+
+    async def activate_theme(self, slug):
+        return CliResult(command=f"theme activate {slug}", exit_code=0)
+
+    async def install_theme(self, slug, *, activate=True):
+        return CliResult(command=f"theme install {slug}", exit_code=0)
 
 
 async def test_gated_without_approval(monkeypatch):
@@ -103,6 +131,13 @@ async def test_applies_and_flushes_when_approved(fake_creds, monkeypatch):
     assert result["sections"] == ["hero", "features"]
     assert result["css_flushed"] is True
     assert FakeWp.created["title"] == "Acme"
+    # Stack check ran (default FakeCli: everything already active) and is reported.
+    assert {i["name"]: i["status"] for i in result["stack_check"]} == {
+        "astra": "already_active",
+        "elementor": "already_active",
+        "royal-elementor-addons": "already_active",
+        "elementskit-lite": "already_active",
+    }
 
 
 async def test_validation_failure_does_not_write(fake_creds, monkeypatch):
@@ -128,6 +163,7 @@ async def test_validation_failure_does_not_write(fake_creds, monkeypatch):
             raise AssertionError("attempted to write invalid Elementor data!")
 
     monkeypatch.setattr(wp_tools, "WordPressRestClient", NoWrite)
+    monkeypatch.setattr(wp_tools, "WpCli", FakeCli)
 
     result = await wp_tools.wp_create_elementor_page.ainvoke(
         {"site_slug": "acme", "brief": "x", "approved": True}
@@ -213,3 +249,126 @@ async def test_page_still_creates_when_image_generation_fails(fake_creds, monkey
     )
     assert result["status"] == "applied"  # page still gets created
     assert FakeWp.uploaded is None  # upload was never reached
+
+
+# --- Required theme/plugin stack check ------------------------------------
+
+
+def _stack_ready(spec):
+    async def fake_generate_page_spec(brief):
+        return spec
+
+    return fake_generate_page_spec
+
+
+async def _passthrough_resolve_images(spec, wp, **kwargs):
+    return spec
+
+
+async def test_stack_check_installs_whatever_is_missing(fake_creds, monkeypatch):
+    spec = PageSpec(title="X", sections=[SectionSpec(type="hero")])
+
+    class PartiallySetUpCli(FakeCli):
+        """Astra installed-but-inactive; Royal Addons missing entirely; the
+        rest already active."""
+
+        async def theme_is_active(self, slug):
+            return CliResult(command="x", exit_code=1)  # not active
+
+        async def theme_is_installed(self, slug):
+            return CliResult(command="x", exit_code=0)  # but installed
+
+        async def plugin_is_active(self, slug):
+            if slug == "royal-elementor-addons":
+                return CliResult(command="x", exit_code=1)
+            return CliResult(command="x", exit_code=0)
+
+        async def plugin_is_installed(self, slug):
+            if slug == "royal-elementor-addons":
+                return CliResult(command="x", exit_code=1)  # not installed either
+            return CliResult(command="x", exit_code=0)
+
+    monkeypatch.setattr(elementor_pkg, "generate_page_spec", _stack_ready(spec))
+    monkeypatch.setattr(images_pkg, "resolve_images", _passthrough_resolve_images)
+    monkeypatch.setattr(
+        elementor_pkg, "build_and_validate", lambda s: [{"id": "s", "elType": "section", "elements": []}]
+    )
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", FakeWp)
+    monkeypatch.setattr(wp_tools, "WpCli", PartiallySetUpCli)
+
+    result = await wp_tools.wp_create_elementor_page.ainvoke(
+        {"site_slug": "acme", "brief": "x", "approved": True}
+    )
+    assert result["status"] == "applied"
+    by_name = {i["name"]: i["status"] for i in result["stack_check"]}
+    assert by_name["astra"] == "activated"  # installed but inactive -> just activate
+    assert by_name["royal-elementor-addons"] == "installed"  # missing entirely -> install
+    assert by_name["elementor"] == "already_active"
+    assert by_name["elementskit-lite"] == "already_active"
+
+
+async def test_elementor_missing_aborts_page_creation(fake_creds, monkeypatch):
+    spec = PageSpec(title="X", sections=[SectionSpec(type="hero")])
+
+    class NoElementorCli(FakeCli):
+        async def plugin_is_active(self, slug):
+            if slug == "elementor":
+                return CliResult(command="x", exit_code=1)
+            return CliResult(command="x", exit_code=0)
+
+        async def plugin_is_installed(self, slug):
+            return CliResult(command="x", exit_code=1)  # not installed either
+
+        async def install_plugin(self, slug, *, activate=True):
+            return CliResult(command="x", exit_code=1, stderr="could not resolve host")
+
+    monkeypatch.setattr(elementor_pkg, "generate_page_spec", _stack_ready(spec))
+
+    class NoWrite(FakeWp):
+        async def create_elementor_page(self, title, data, *, status="draft"):
+            raise AssertionError("must not write a page when Elementor is unavailable!")
+
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", NoWrite)
+    monkeypatch.setattr(wp_tools, "WpCli", NoElementorCli)
+
+    result = await wp_tools.wp_create_elementor_page.ainvoke(
+        {"site_slug": "acme", "brief": "x", "approved": True}
+    )
+    assert result["status"] == "error"
+    assert result["stage"] == "stack_check"
+    assert "elementor" in result["errors"][0]
+
+
+async def test_optional_plugin_failure_does_not_block_page_creation(fake_creds, monkeypatch):
+    spec = PageSpec(title="X", sections=[SectionSpec(type="hero")])
+
+    class FlakyRoyalAddonsCli(FakeCli):
+        async def plugin_is_active(self, slug):
+            if slug == "royal-elementor-addons":
+                return CliResult(command="x", exit_code=1)
+            return CliResult(command="x", exit_code=0)
+
+        async def plugin_is_installed(self, slug):
+            if slug == "royal-elementor-addons":
+                return CliResult(command="x", exit_code=1)
+            return CliResult(command="x", exit_code=0)
+
+        async def install_plugin(self, slug, *, activate=True):
+            if slug == "royal-elementor-addons":
+                return CliResult(command="x", exit_code=1, stderr="plugin not found")
+            return CliResult(command="x", exit_code=0)
+
+    monkeypatch.setattr(elementor_pkg, "generate_page_spec", _stack_ready(spec))
+    monkeypatch.setattr(images_pkg, "resolve_images", _passthrough_resolve_images)
+    monkeypatch.setattr(
+        elementor_pkg, "build_and_validate", lambda s: [{"id": "s", "elType": "section", "elements": []}]
+    )
+    monkeypatch.setattr(wp_tools, "WordPressRestClient", FakeWp)
+    monkeypatch.setattr(wp_tools, "WpCli", FlakyRoyalAddonsCli)
+
+    result = await wp_tools.wp_create_elementor_page.ainvoke(
+        {"site_slug": "acme", "brief": "x", "approved": True}
+    )
+    assert result["status"] == "applied"  # page still gets created
+    by_name = {i["name"]: i["status"] for i in result["stack_check"]}
+    assert by_name["royal-elementor-addons"] == "failed"

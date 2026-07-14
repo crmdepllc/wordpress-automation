@@ -10,6 +10,7 @@ THRESHOLDS: dict[str, float] = {
     "elementor": 90.0,
     "content": 90.0,
     "images": 90.0,
+    "stack": 90.0,
     "seo": 90.0,
     "theme": 85.0,
     "plugins": 85.0,

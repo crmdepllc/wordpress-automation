@@ -385,6 +385,37 @@ This breaks the project from project-overview.md into 10 sequential sprints. Eac
 
 ---
 
+## Required theme/plugin stack pre-flight check — ✅ COMPLETE (post-Sprint 8 fix)
+
+**Phase:** Hardening (unscheduled — AGENTS.md's plugin-stack rule, Elementor + Royal Addons + ElementsKit, was documented since the earlier session but never actually implemented anywhere in code; user also added a new requirement — the Astra theme — that wasn't documented at all)
+
+**Goal:** Before generating any Elementor page, verify (and install/activate whatever's missing from) the Astra theme and the three required plugins, so a page is never built assuming a stack that isn't actually there.
+
+**Tasks**
+- [x] Confirmed via research that none of this existed: no `plugin list`/`is-active`/`theme list`/`is-active`/theme-install-activate in `WpCli`; no status-check tool; no precondition in `wp_create_elementor_page`; the planner has no "always include this step" mechanism (only step *ordering* is code-enforced, membership is purely LLM-proposed)
+- [x] Verified real WordPress.org slugs before writing anything (not guessed): theme `astra`; plugins `royal-elementor-addons`, `elementskit-lite` (its real WP.org name literally is "ElementsKit Elementor Addons – Advanced..." — "Advanced" is part of the free plugin's name, not a paid tier)
+- [x] Verified the exact WP-CLI subcommands used (`plugin is-active`/`is-installed`, `theme is-active`/`is-installed`) against `developer.wordpress.org`'s official command reference before implementing — Docker was down, so this replaced live ground-truth-checking for this narrow piece
+- [x] `app/wp/wpcli.py`: added `plugin_is_installed`/`plugin_is_active`/`install_theme`/`activate_theme`/`theme_is_installed`/`theme_is_active`
+- [x] New `app/agent/skills/stack.py`: `ensure_required_stack` — check-then-act (only installs/activates what's actually missing), Elementor fail-closed (`RequiredStackError`), Astra/Royal Addons/ElementsKit best-effort (logged, page proceeds)
+- [x] `wp_tools.py`: `wp_create_elementor_page` runs the stack check right after opening the WP-CLI client, before spec generation; reports per-item status under a new `stack_check` response field
+- [x] Tests: `WpCli` unit tests for the 6 new methods, dedicated `tests/test_stack.py` (7 cases), `wp_tools.py` tests for hard-fail/best-effort/partial-setup paths (3 new + fixed one pre-existing test that had never mocked `WpCli` at all)
+- [x] New eval scenario module `app/evals/scenarios/stack.py` (4 scenarios) wired into `runner.py`/`thresholds.py` — 32 scenarios total across 8 skills
+- [x] `AGENTS.md` updated: Astra added alongside the existing plugin-stack rule, plus the fail-closed/best-effort split documented explicitly
+- [x] `pytest -m "not integration"` (138 passed, 1 pre-existing unrelated failure) + `scripts/run_evals.py` (all 8 skills 100/100, no regressions)
+
+**Deliverable:** `wp_create_elementor_page` never generates a page against an unverified stack — Astra + Elementor + Royal Addons + ElementsKit are checked (and fixed if missing) every time, with Elementor treated as non-negotiable and the rest as enhancements. — **Met**, code-complete.
+
+**Architecture decisions (via `/architect`, confirmed with the user before building)**
+- **Internal precondition inside `wp_create_elementor_page`, not a planner-injected step.** Matches the existing "mandatory, not user-interesting" pattern (auto CSS-flush, image resolution) rather than building new orchestrator "always-include-this-step" machinery the codebase doesn't have. Tradeoff: the user doesn't see "installing Royal Addons" as its own approval-modal line item — it's covered by the single "create Elementor page" approval, with results surfaced in `stack_check`.
+- **Elementor hard-required, Astra/Royal Addons/ElementsKit best-effort** — consistent with the graceful-degradation precedent just set for image generation (Issue 12). Nothing can be built without Elementor; core Elementor widgets still work without the other three.
+- **Check-then-act, not always-install** — every item's status is checked first (`is-active`, then `is-installed` only if inactive); install/activate only runs for what's actually missing, so a site that's already fully set up costs 4 cheap status checks per page, not repeated installs.
+
+**Notes**
+- **Not live-verified against the Docker sandbox** — Docker was down for the entire second half of this session (the same recurring pattern as Issues 1/3/4/5/11). Confidence is still reasonably high: unlike hand-authored Elementor JSON, these are standard WP-CLI boolean subcommands verified directly against `developer.wordpress.org`'s official reference (not guessed from memory — an earlier draft of `theme_is_active` was in fact wrong, caught before it shipped by checking docs instead of assuming). Live verification against a real sandbox is still a should-do before fully trusting this in production, per the same rule #3 spirit — flagged as a follow-up, not silently skipped.
+- Found and fixed a real bug while researching before writing any code: `theme_is_active`'s first draft used `wp theme list --status=active --field=name` (ignoring the `slug` argument entirely) instead of the real `wp theme is-active <slug>` boolean command — caught by checking the official WP-CLI docs rather than trusting the initial implementation.
+
+---
+
 ## Sprint 9 — Security hardening
 
 **Phase:** Hardening

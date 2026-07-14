@@ -22,7 +22,7 @@ async def test_no_skill_regresses_below_its_threshold():
 
 async def test_every_skill_has_scenarios():
     reports = await run_all()
-    assert len(reports) == 7
+    assert len(reports) == 8
     for report in reports:
         assert report.results, f"{report.skill} has no scenarios"
 

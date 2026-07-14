@@ -167,6 +167,31 @@ class WpCli:
     async def activate_plugin(self, slug: str) -> CliResult:
         return await self._executor.run(["plugin", "activate", slug])
 
+    async def plugin_is_installed(self, slug: str) -> CliResult:
+        """Boolean check (exit code only) — read-only."""
+        return await self._executor.run(["plugin", "is-installed", slug])
+
+    async def plugin_is_active(self, slug: str) -> CliResult:
+        """Boolean check (exit code only) — read-only."""
+        return await self._executor.run(["plugin", "is-active", slug])
+
+    async def install_theme(self, slug: str, *, activate: bool = True) -> CliResult:
+        args = ["theme", "install", slug]
+        if activate:
+            args.append("--activate")
+        return await self._executor.run(args)
+
+    async def activate_theme(self, slug: str) -> CliResult:
+        return await self._executor.run(["theme", "activate", slug])
+
+    async def theme_is_installed(self, slug: str) -> CliResult:
+        """Boolean check (exit code only) — read-only."""
+        return await self._executor.run(["theme", "is-installed", slug])
+
+    async def theme_is_active(self, slug: str) -> CliResult:
+        """Boolean check (exit code only) — read-only."""
+        return await self._executor.run(["theme", "is-active", slug])
+
     async def flush_css(self) -> CliResult:
         """Regenerate Elementor CSS — run after every layout write."""
         return await self._executor.run(["elementor", "flush-css"])
